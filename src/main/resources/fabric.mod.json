@@ -13,6 +13,7 @@
     }
   ],
   "contact": {
+    "homepage": "https://modrinth.com/mod/gui-api",
     "issues": "https://github.com/ToolkitMC/guiAPI/issues",
     "sources": "https://github.com/ToolkitMC/guiAPI"
   },
@@ -38,11 +39,6 @@
   },
   "custom": {
     "modmenu": {
-      "badges": [ "library" ],
-      "links": {
-        "modmenu.sources": "https://github.com/ToolkitMC/guiAPI",
-        "modmenu.issues":  "https://github.com/ToolkitMC/guiAPI/issues"
-      },
       "update_checker": true
     }
   }
