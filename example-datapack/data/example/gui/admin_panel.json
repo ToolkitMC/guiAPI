@@ -1,0 +1,102 @@
+{
+  "title": "§6Admin Panel §8— {player}",
+  "rows": 3,
+  "on_open": [
+    { "type": "run_command", "value": "tag @s add in_admin_panel", "run_with": "console" },
+    { "type": "sound", "value": "minecraft:block.note_block.pling:1.0:1.2" }
+  ],
+  "on_close": [
+    { "type": "run_command", "value": "tag @s remove in_admin_panel", "run_with": "console" }
+  ],
+  "buttons": [
+    {
+      "slot": 10,
+      "item": "minecraft:book",
+      "name": "§aRules",
+      "lore": ["§7Click to see the server rules."],
+      "actions": [
+        { "type": "sound", "value": "minecraft:entity.experience_orb.pickup" },
+        { "type": "message", "value": "§6Rules: §fBe respectful. No griefing. No cheating." }
+      ]
+    },
+    {
+      "slot": 12,
+      "item": "minecraft:compass",
+      "name": "§bSpawn §8(Left)",
+      "lore": ["§7Teleport to spawn.", "§8Left-click only."],
+      "click_type": "left",
+      "actions": [
+        { "type": "run_command", "value": "tp @s 0 64 0" },
+        { "type": "sound", "value": "minecraft:entity.enderman.teleport" },
+        { "type": "close" }
+      ]
+    },
+    {
+      "slot": 12,
+      "item": "minecraft:compass",
+      "name": "§bCoords §8(Right)",
+      "lore": ["§7Show your coordinates.", "§8Right-click only."],
+      "click_type": "right",
+      "actions": [
+        { "type": "run_command", "value": "execute as @s run data get entity @s Pos" }
+      ]
+    },
+    {
+      "slot": 13,
+      "toggle": {
+        "tag": "pvp_enabled",
+        "item_on":  "minecraft:iron_sword",
+        "item_off": "minecraft:shield",
+        "name_on":  "§cPvP: ON",
+        "name_off": "§aPvP: OFF",
+        "lore_on":  ["§7Click to disable PvP.", "§8Player: {player}"],
+        "lore_off": ["§7Click to enable PvP.",  "§8Player: {player}"],
+        "glint_on": true,
+        "actions_on": [
+          { "type": "sound", "value": "minecraft:block.anvil.land:0.5:1.0" },
+          { "type": "message", "value": "§cPvP disabled, {player}." }
+        ],
+        "actions_off": [
+          { "type": "sound", "value": "minecraft:entity.player.attack.sweep" },
+          { "type": "message", "value": "§aPvP enabled, {player}!" }
+        ]
+      }
+    },
+    {
+      "slot": 14,
+      "item": "minecraft:ender_pearl",
+      "name": "§dMore Options",
+      "lore": ["§7Open the second menu."],
+      "actions": [
+        { "type": "open_gui", "value": "example:sub_menu" }
+      ]
+    },
+    {
+      "slot": 15,
+      "item": "minecraft:nether_star",
+      "name": "§cAdmin Tools",
+      "lore": [
+        "§7Only visible with the §cadmin§7 tag.",
+        "§8Shift-click to activate."
+      ],
+      "glint": true,
+      "click_type": "shift",
+      "condition": { "type": "has_tag", "value": "admin" },
+      "actions": [
+        { "type": "run_command", "value": "gamemode creative @s", "run_with": "console" },
+        { "type": "sound", "value": "minecraft:ui.toast.challenge_complete:1.0:0.8" },
+        { "type": "message", "value": "§aCreative mode enabled, {player}." },
+        { "type": "close" }
+      ]
+    },
+    {
+      "slot": 16,
+      "item": "minecraft:barrier",
+      "name": "§cClose",
+      "actions": [
+        { "type": "sound", "value": "minecraft:block.wooden_button.click_off" },
+        { "type": "close" }
+      ]
+    }
+  ]
+}

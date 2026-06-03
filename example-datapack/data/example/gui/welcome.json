@@ -1,0 +1,32 @@
+{
+  "title": "§6Welcome!",
+  "rows": 2,
+  "buttons": [
+    {
+      "slot": 2,
+      "item": "minecraft:written_book",
+      "name": "§aAccept Rules",
+      "lore": [
+        "§7By clicking you agree to:",
+        "§f- Be respectful",
+        "§f- No griefing",
+        "§f- No cheating"
+      ],
+      "glint": true,
+      "actions": [
+        { "type": "run_command", "value": "tag @s add rules_accepted" },
+        { "type": "message", "value": "§aWelcome! Enjoy your stay." },
+        { "type": "close" }
+      ]
+    },
+    {
+      "slot": 6,
+      "item": "minecraft:barrier",
+      "name": "§cDecline",
+      "lore": ["§7You will be disconnected."],
+      "actions": [
+        { "type": "run_command", "value": "kick @s You must accept the rules to play.", "run_with": "console" }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,35 @@
+{
+  "title": "§dMore Options",
+  "rows": 1,
+  "buttons": [
+    {
+      "slot": 2,
+      "item": "minecraft:clock",
+      "name": "§eSet Day",
+      "lore": ["§7Set time to day."],
+      "actions": [
+        { "type": "run_command", "value": "time set day", "run_with": "console" },
+        { "type": "message", "value": "§aTime set to day." }
+      ]
+    },
+    {
+      "slot": 4,
+      "item": "minecraft:sunflower",
+      "name": "§aClear Weather",
+      "lore": ["§7Set weather to clear."],
+      "actions": [
+        { "type": "run_command", "value": "weather clear", "run_with": "console" },
+        { "type": "message", "value": "§aWeather cleared." }
+      ]
+    },
+    {
+      "slot": 6,
+      "item": "minecraft:arrow",
+      "name": "§7← Back",
+      "lore": ["§7Return to admin panel."],
+      "actions": [
+        { "type": "open_gui", "value": "example:admin_panel" }
+      ]
+    }
+  ]
+}

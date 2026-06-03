@@ -1,0 +1,63 @@
+{
+  "title": "§6Counter: §f{var:count}  §8— {player}",
+  "rows": 1,
+  "on_open": [
+    { "type": "set_var", "var": "count", "value": "0" },
+    { "type": "sound", "value": "minecraft:block.note_block.pling:0.8:1.0" }
+  ],
+  "buttons": [
+    {
+      "slot": 2,
+      "item": "minecraft:lime_dye",
+      "name": "§a+1",
+      "lore": ["§7Current: §f{var:count}"],
+      "actions": [
+        { "type": "add_var", "var": "count", "value": "1" },
+        { "type": "sound", "value": "minecraft:block.note_block.pling:1.0:1.5" },
+        { "type": "open_gui", "value": "example:counter" }
+      ]
+    },
+    {
+      "slot": 3,
+      "item": "minecraft:red_dye",
+      "name": "§c-1",
+      "lore": ["§7Current: §f{var:count}", "§8Disabled at 0."],
+      "condition": { "type": "var_gt", "value": "count:0" },
+      "actions": [
+        { "type": "sub_var", "var": "count", "value": "1" },
+        { "type": "sound", "value": "minecraft:block.note_block.bass:1.0:1.0" },
+        { "type": "open_gui", "value": "example:counter" }
+      ]
+    },
+    {
+      "slot": 4,
+      "item": "minecraft:paper",
+      "name": "§fValue: §e{var:count}",
+      "lore": [
+        "§7Player: §f{player}",
+        "§7GUI: §8{gui}"
+      ]
+    },
+    {
+      "slot": 5,
+      "item": "minecraft:comparator",
+      "name": "§7Reset",
+      "lore": ["§8Only visible when count > 0."],
+      "condition": { "type": "var_set", "value": "count" },
+      "actions": [
+        { "type": "reset_var", "var": "count" },
+        { "type": "sound", "value": "minecraft:block.lever.click:1.0:0.8" },
+        { "type": "open_gui", "value": "example:counter" }
+      ]
+    },
+    {
+      "slot": 7,
+      "item": "minecraft:barrier",
+      "name": "§cClose",
+      "actions": [
+        { "type": "sound", "value": "minecraft:block.wooden_button.click_off" },
+        { "type": "close" }
+      ]
+    }
+  ]
+}
