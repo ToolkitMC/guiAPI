@@ -4,7 +4,6 @@ import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import dev.toolkitmc.guiapi.GuiApiMod;
 import dev.toolkitmc.guiapi.gui.GuiDefinition;
-import net.fabricmc.fabric.api.resource.IdentifiableResourceReloadListener;
 import net.minecraft.resource.ResourceManager;
 import net.minecraft.resource.SinglePreparationResourceReloader;
 import net.minecraft.util.Identifier;
@@ -21,9 +20,12 @@ import java.util.Optional;
  *
  * Registered as a server-side resource reload listener so it fires on
  * /reload as well as world load.
+ *
+ * 1.21.9 change: no longer implements IdentifiableResourceReloadListener
+ * (removed in Fabric API 0.134+). The reloader is registered externally
+ * via ResourceLoader.get(...).registerReloader(id, instance) in GuiApiMod.
  */
-public class GuiRegistry extends SinglePreparationResourceReloader<Map<Identifier, GuiDefinition>>
-        implements IdentifiableResourceReloadListener {
+public class GuiRegistry extends SinglePreparationResourceReloader<Map<Identifier, GuiDefinition>> {
 
     public static final GuiRegistry INSTANCE = new GuiRegistry();
 
@@ -36,11 +38,6 @@ public class GuiRegistry extends SinglePreparationResourceReloader<Map<Identifie
     private final Map<Identifier, GuiDefinition> addonDefinitions = new HashMap<>();
 
     private GuiRegistry() {}
-
-    @Override
-    public Identifier getFabricId() {
-        return Identifier.of("guiapi", "gui_registry");
-    }
 
     // ── ResourceReloader impl ────────────────────────────────────────────────
 

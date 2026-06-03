@@ -1,4 +1,4 @@
-# GUI API — Fabric 1.21.1
+# GUI API — Fabric 1.21.9
 
 A Fabric mod that lets datapacks define and open chest GUIs via JSON files.  
 No client mod required. No macros. No external dependencies beyond Fabric API.
@@ -7,7 +7,7 @@ No client mod required. No macros. No external dependencies beyond Fabric API.
 
 ## Installation
 
-1. Drop `guiapi-1.0.3.jar` into your `mods/` folder.
+1. Drop `guiapi-1.1.0-1.21.9.jar` into your `mods/` folder.
 2. Drop your datapack into `world/datapacks/`.
 3. Run `/reload` or `/guiapi reload`.
 
@@ -330,7 +330,7 @@ Variables are per-player, in-memory, and cleared when the GUI closes.
 
 ```bash
 ./gradlew build
-# Output: build/libs/guiapi-1.0.3.jar
+# Output: build/libs/guiapi-1.1.0-1.21.9.jar
 ```
 
 Requires **Java 21**.
