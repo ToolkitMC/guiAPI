@@ -1,4 +1,4 @@
-# GUI API — Fabric 1.21.1
+# GUI API — Fabric 1.21.8
 
 A Fabric mod that lets datapacks define and open chest GUIs via JSON files.  
 No client mod required. No macros. No external dependencies beyond Fabric API.
