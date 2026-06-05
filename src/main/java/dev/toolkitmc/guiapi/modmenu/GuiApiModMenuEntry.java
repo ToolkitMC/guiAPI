@@ -325,6 +325,7 @@ public class GuiApiModMenuEntry implements ModMenuApi {
             // Action Buttons
             // Save & Back
             addDrawableChild(ButtonWidget.builder(Text.literal("Apply & Back"), btn -> {
+                // Use factory method to avoid any package constructor access constraints
                 GuiDefinition newDef = GuiDefinition.create(
                         def.getId(),
                         titleField.getText(),
@@ -599,7 +600,7 @@ public class GuiApiModMenuEntry implements ModMenuApi {
         private TextFieldWidget nameField;
         private TextFieldWidget amountField;
         private TextFieldWidget loreField; // Combined Lore input field (separated by ;)
-        
+
         // Primary click action fields
         private GuiDefinition.ActionType actionType;
         private TextFieldWidget actionValueField;
@@ -852,7 +853,9 @@ public class GuiApiModMenuEntry implements ModMenuApi {
                     new GuiDefinition.ToggleDefinition(
                             "pvp_enabled", "minecraft:lime_dye", "minecraft:gray_dye",
                             "§aEnabled", "§7Disabled", List.of(), List.of(), false, false,
-                            List.of(), List.of()
+                            List.of(), List.of(),
+                            Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(),
+                            "1", "1", false, false, false, false
                     )
             );
 
@@ -905,7 +908,17 @@ public class GuiApiModMenuEntry implements ModMenuApi {
                         tgl.glintOn(),
                         tgl.glintOff(),
                         tgl.actionsOn(),
-                        tgl.actionsOff()
+                        tgl.actionsOff(),
+                        tgl.customModelDataOn(),
+                        tgl.customModelDataOff(),
+                        tgl.itemModelOn(),
+                        tgl.itemModelOff(),
+                        tgl.amountOn(),
+                        tgl.amountOff(),
+                        tgl.hideTooltipOn(),
+                        tgl.hideTooltipOff(),
+                        tgl.hideAdditionalTooltipOn(),
+                        tgl.hideAdditionalTooltipOff()
                 );
                 parent.updateToggle(Optional.of(newToggle));
                 MinecraftClient.getInstance().setScreen(parent);
@@ -948,6 +961,10 @@ public class GuiApiModMenuEntry implements ModMenuApi {
                 return true;
             }
             return super.charTyped(chr, modifiers);
+        }
+
+        private static Text toggleText(boolean on) {
+            return on ? Text.literal("§aON") : Text.literal("§cOFF");
         }
     }
 }
