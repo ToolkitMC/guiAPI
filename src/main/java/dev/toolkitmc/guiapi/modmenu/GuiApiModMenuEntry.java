@@ -3,13 +3,17 @@ package dev.toolkitmc.guiapi.modmenu;
 import com.terraformersmc.modmenu.api.ConfigScreenFactory;
 import com.terraformersmc.modmenu.api.ModMenuApi;
 import dev.toolkitmc.guiapi.config.GuiApiConfig;
+import dev.toolkitmc.guiapi.gui.GuiDefinition;
 import dev.toolkitmc.guiapi.loader.GuiRegistry;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.widget.ButtonWidget;
 import net.minecraft.client.gui.widget.TextWidget;
+import net.minecraft.client.gui.widget.TextFieldWidget;
 import net.minecraft.text.Text;
+
+import java.util.List;
 
 /**
  * Mod Menu integration — settings screen + loaded GUI list.
@@ -119,17 +123,21 @@ public class GuiApiModMenuEntry implements ModMenuApi {
 
             int shown = 0;
             for (var entry : all.entrySet()) {
-                if (shown >= 5) {
+                if (shown >= 4) {
                     addDrawableChild(new TextWidget(cx - 150, y, 300, 10,
-                            Text.literal("§8... and " + (count - 5) + " more"), textRenderer));
+                            Text.literal("§8... and " + (count - 4) + " more"), textRenderer));
                     break;
                 }
+                var id = entry.getKey();
                 var def = entry.getValue();
-                addDrawableChild(new TextWidget(cx - 150, y, 300, 10,
-                        Text.literal("§a" + entry.getKey() +
-                                " §8[rows=" + def.getRows() + ", pages=" + def.getPageCount() + "]"),
-                        textRenderer));
-                y += 10;
+
+                // Client Feature: Clickable GUI list entries to open GUI Editor Screen
+                addDrawableChild(ButtonWidget.builder(
+                        Text.literal("Edit: " + id.getPath() + " (" + def.getRows() + " rows)"),
+                        btn -> MinecraftClient.getInstance().setScreen(new GuiEditorScreen(this, id, def))
+                ).dimensions(cx - 150, y, 300, 18).build());
+
+                y += 20;
                 shown++;
             }
 
@@ -211,6 +219,142 @@ public class GuiApiModMenuEntry implements ModMenuApi {
                 default -> "§f";
             };
             return Text.literal(color + level);
+        }
+    }
+
+    // ── GUI Editor Screen ────────────────────────────────────────────────────
+
+    static class GuiEditorScreen extends Screen {
+        private final Screen parent;
+        private final net.minecraft.util.Identifier id;
+        private final GuiDefinition def;
+
+        private TextFieldWidget titleField;
+        private int rows;
+        private int tickRate;
+        private boolean closeOnMove;
+
+        GuiEditorScreen(Screen parent, net.minecraft.util.Identifier id, GuiDefinition def) {
+            super(Text.literal("Edit GUI — " + id.getPath()));
+            this.parent = parent;
+            this.id = id;
+            this.def = def;
+            this.rows = def.getRows();
+            this.tickRate = def.getTickRate();
+            this.closeOnMove = def.isCloseOnMove();
+        }
+
+        @Override
+        protected void init() {
+            int cx = width / 2;
+            int y = 40;
+
+            // Title Input
+            addDrawableChild(new TextWidget(cx - 150, y, 300, 10, Text.literal("§eEdit GUI Title"), textRenderer));
+            y += 14;
+            titleField = new TextFieldWidget(textRenderer, cx - 150, y, 300, 20, Text.literal("Title"));
+            titleField.setMaxLength(128);
+            titleField.setText(def.getTitle());
+            titleField.setFocused(true);
+            addDrawableChild(titleField);
+            y += 30;
+
+            // Rows Configuration (Button to Cycle rows 1 to 6)
+            addDrawableChild(new TextWidget(cx - 150, y + 4, 200, 10, Text.literal("§fGUI Rows"), textRenderer));
+            ButtonWidget[] rowsBtnRef = new ButtonWidget[1];
+            rowsBtnRef[0] = ButtonWidget.builder(Text.literal("§a" + rows), btn -> {
+                rows = (rows % 6) + 1;
+                btn.setMessage(Text.literal("§a" + rows));
+            }).dimensions(cx + 60, y, 40, 18).build();
+            addDrawableChild(rowsBtnRef[0]);
+            y += 24;
+
+            // Close on Move Toggle
+            addDrawableChild(new TextWidget(cx - 150, y + 4, 200, 10, Text.literal("§fClose on Move"), textRenderer));
+            ButtonWidget[] closeOnMoveBtnRef = new ButtonWidget[1];
+            closeOnMoveBtnRef[0] = ButtonWidget.builder(toggleText(closeOnMove), btn -> {
+                closeOnMove = !closeOnMove;
+                btn.setMessage(toggleText(closeOnMove));
+            }).dimensions(cx + 60, y, 40, 18).build();
+            addDrawableChild(closeOnMoveBtnRef[0]);
+            y += 24;
+
+            // Tick Rate Controls (Increment / Decrement Buttons)
+            addDrawableChild(new TextWidget(cx - 150, y + 4, 150, 10, Text.literal("§fTick Rate (Auto-Refresh)"), textRenderer));
+
+            // Display value widget
+            TextWidget[] tickRateTextRef = new TextWidget[1];
+            tickRateTextRef[0] = new TextWidget(cx + 10, y + 4, 40, 10, Text.literal("§e" + tickRate), textRenderer);
+            addDrawableChild(tickRateTextRef[0]);
+
+            // Decrement -5
+            addDrawableChild(ButtonWidget.builder(Text.literal("-5"), btn -> {
+                tickRate = Math.max(0, tickRate - 5);
+                tickRateTextRef[0].setMessage(Text.literal("§e" + tickRate));
+            }).dimensions(cx + 50, y, 20, 18).build());
+
+            // Increment +5
+            addDrawableChild(ButtonWidget.builder(Text.literal("+5"), btn -> {
+                tickRate = Math.min(2400, tickRate + 5);
+                tickRateTextRef[0].setMessage(Text.literal("§e" + tickRate));
+            }).dimensions(cx + 75, y, 20, 18).build());
+            y += 40;
+
+            // Action Buttons
+            // Save & Back
+            addDrawableChild(ButtonWidget.builder(Text.literal("Apply & Back"), btn -> {
+                GuiDefinition newDef = new GuiDefinition(
+                        def.getId(),
+                        titleField.getText(),
+                        rows,
+                        def.getButtons(),
+                        def.getOnOpen(),
+                        def.getOnClose(),
+                        def.getFiller(),
+                        tickRate,
+                        closeOnMove
+                );
+                dev.toolkitmc.guiapi.loader.GuiRegistry.INSTANCE.put(id, newDef);
+                MinecraftClient.getInstance().setScreen(parent);
+            }).dimensions(cx - 105, height - 25, 100, 20).build());
+
+            // Cancel
+            addDrawableChild(ButtonWidget.builder(Text.literal("Cancel"), btn ->
+                    MinecraftClient.getInstance().setScreen(parent))
+                    .dimensions(cx + 5, height - 25, 100, 20).build());
+        }
+
+        @Override
+        public void render(DrawContext ctx, int mouseX, int mouseY, float delta) {
+            super.render(ctx, mouseX, mouseY, delta);
+            ctx.drawCenteredTextWithShadow(textRenderer,
+                    Text.literal("§6GUI Editor §7— " + id.toString()), width / 2, 10, 0xFFFFFF);
+            ctx.fill(width / 2 - 150, height - 32, width / 2 + 150, height - 31, 0x44FFFFFF);
+        }
+
+        @Override
+        public void tick() {
+            titleField.tick();
+        }
+
+        @Override
+        public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+            if (titleField.keyPressed(keyCode, scanCode, modifiers)) {
+                return true;
+            }
+            return super.keyPressed(keyCode, scanCode, modifiers);
+        }
+
+        @Override
+        public boolean charTyped(char chr, int modifiers) {
+            if (titleField.charTyped(chr, modifiers)) {
+                return true;
+            }
+            return super.charTyped(chr, modifiers);
+        }
+
+        private static Text toggleText(boolean on) {
+            return on ? Text.literal("§aON") : Text.literal("§cOFF");
         }
     }
 }
