@@ -22,6 +22,14 @@ public class GuiScreenHandler extends GenericContainerScreenHandler {
         this.page = page;
     }
 
+    public GuiDefinition getDefinition() {
+        return definition;
+    }
+
+    public int getPage() {
+        return page;
+    }
+
     @Override
     public void onSlotClick(int slotIndex, int button, SlotActionType actionType, PlayerEntity player) {
         // `getRows()` is from GenericContainerScreenHandler — always matches

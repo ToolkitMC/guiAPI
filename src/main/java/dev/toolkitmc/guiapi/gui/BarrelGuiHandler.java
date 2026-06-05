@@ -6,6 +6,7 @@ import net.minecraft.component.type.LoreComponent;
 import net.minecraft.component.type.NbtComponent;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.entity.player.PlayerInventory;
+import net.minecraft.inventory.Inventory;
 import net.minecraft.inventory.SimpleInventory;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
@@ -27,6 +28,7 @@ import net.minecraft.util.Identifier;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.Optional;
 
 /**
  * Server-side chest GUI handler.
@@ -34,12 +36,15 @@ import java.util.UUID;
  * Features:
  *  - Multi-page support (page tracked per player)
  *  - Toggle buttons (tag-backed on/off state)
- *  - Conditional buttons (has_tag, not_tag, score_gt/lt/eq)
+ *  - Conditional buttons (has_tag, not_tag, score_gt/lt/eq, has_item, not_item)
  *  - Multiple actions per button (executed in order)
  *  - on_open / on_close action hooks
  *  - Placeholder substitution in text fields
  *  - Enchantment glint on items
  *  - run_command with run_with: player|console
+ *  - Dynamic refresh support (refresh action & flicker-free toggle)
+ *  - take_item action support
+ *  - item_model and 1.21.4+ custom_model_data support
  */
 public class BarrelGuiHandler {
 
@@ -95,6 +100,31 @@ public class BarrelGuiHandler {
         }
     }
 
+    public static void refreshCurrentGui(ServerPlayerEntity player) {
+        if (player.currentScreenHandler instanceof GuiScreenHandler guiHandler) {
+            GuiDefinition def = guiHandler.getDefinition();
+            int page = guiHandler.getPage();
+            int rows = guiHandler.getRows();
+            int size = rows * 9;
+            Inventory inv = guiHandler.getInventory();
+
+            // Clear inventory first
+            for (int slot = 0; slot < size; slot++) {
+                inv.setStack(slot, ItemStack.EMPTY);
+            }
+
+            // Populate according to page buttons and conditions
+            for (GuiDefinition.Button btn : def.getButtonsForPage(page)) {
+                if (btn.slot() < 0 || btn.slot() >= size) continue;
+                if (!evaluateCondition(player, btn)) continue;
+                inv.setStack(btn.slot(), buildStack(player, def, page, btn));
+            }
+            // Send content updates to client
+            guiHandler.sendContentUpdates();
+            debug("refreshCurrentGui: player={} gui={} page={}", player.getNameForScoreboard(), def.getId(), page);
+        }
+    }
+
     public static boolean handleClick(ServerPlayerEntity player, GuiDefinition def,
                                       int page, int slot, int mouseButton, SlotActionType actionType) {
         // mouseButton: 0 = left, 1 = right (Minecraft protocol)
@@ -140,9 +170,7 @@ public class BarrelGuiHandler {
                     if (shouldBreak) { chainBroken = true; break; }
                 }
                 if (!chainBroken) {
-                    navigateAway(player);
-                    player.closeHandledScreen();
-                    open(player, def, page);
+                    refreshCurrentGui(player);
                 }
                 return true;
             }
@@ -213,6 +241,8 @@ public class BarrelGuiHandler {
         final String  name;
         final List<String> lore;
         final boolean glint;
+        final Optional<GuiDefinition.CustomModelDataConfig> customModelData;
+        final Optional<String> itemModel;
 
         if (btn.toggle().isPresent()) {
             GuiDefinition.ToggleDefinition tgl = btn.toggle().get();
@@ -221,11 +251,15 @@ public class BarrelGuiHandler {
             name   = on ? tgl.nameOn()  : tgl.nameOff();
             lore   = on ? tgl.loreOn()  : tgl.loreOff();
             glint  = on ? tgl.glintOn() : tgl.glintOff();
+            customModelData = on ? tgl.customModelDataOn() : tgl.customModelDataOff();
+            itemModel = on ? tgl.itemModelOn() : tgl.itemModelOff();
         } else {
             itemId = btn.item();
             name   = btn.name();
             lore   = btn.lore();
             glint  = btn.glint();
+            customModelData = btn.customModelData();
+            itemModel = btn.itemModel();
         }
 
         Identifier id = Identifier.tryParse(itemId);
@@ -258,6 +292,24 @@ public class BarrelGuiHandler {
 
         // Mark as GUI item to block extraction
         stack.set(DataComponentTypes.CUSTOM_DATA, NbtComponent.of(new NbtCompound()));
+
+        // --- Custom Model Data ---
+        if (customModelData.isPresent()) {
+            GuiDefinition.CustomModelDataConfig cmd = customModelData.get();
+            net.minecraft.component.type.CustomModelDataComponent component =
+                    new net.minecraft.component.type.CustomModelDataComponent(
+                            cmd.floats(), cmd.flags(), cmd.strings(), cmd.colors()
+                    );
+            stack.set(DataComponentTypes.CUSTOM_MODEL_DATA, component);
+        }
+
+        // --- Item Model ---
+        if (itemModel.isPresent()) {
+            Identifier modelId = Identifier.tryParse(itemModel.get());
+            if (modelId != null) {
+                stack.set(DataComponentTypes.ITEM_MODEL, modelId);
+            }
+        }
 
         return stack;
     }
@@ -338,7 +390,58 @@ public class BarrelGuiHandler {
                         .getInt(player.getUuid(), p[0]) < parseIntSafe(p[1]);
             }
             case VAR_SET  -> GuiVarStore.INSTANCE.get(player.getUuid(), cond.value()) != null;
+            case HAS_ITEM -> {
+                String[] parts = cond.value().split(":", 2);
+                String itemId = parts[0];
+                int amount = parts.length > 1 ? parseIntSafe(parts[1]) : 1;
+                yield hasItemCount(player, itemId, amount);
+            }
+            case NOT_ITEM -> {
+                String[] parts = cond.value().split(":", 2);
+                String itemId = parts[0];
+                int amount = parts.length > 1 ? parseIntSafe(parts[1]) : 1;
+                yield !hasItemCount(player, itemId, amount);
+            }
         };
+    }
+
+    private static boolean hasItemCount(ServerPlayerEntity player, String itemId, int requiredAmount) {
+        Identifier id = Identifier.tryParse(itemId);
+        if (id == null || !Registries.ITEM.containsId(id)) return false;
+        Item targetItem = Registries.ITEM.get(id);
+
+        int count = 0;
+        for (int i = 0; i < player.getInventory().size(); i++) {
+            ItemStack stack = player.getInventory().getStack(i);
+            if (!stack.isEmpty() && stack.isOf(targetItem)) {
+                count += stack.getCount();
+            }
+        }
+        return count >= requiredAmount;
+    }
+
+    private static void takeItemCount(ServerPlayerEntity player, String itemId, int amountToTake) {
+        Identifier id = Identifier.tryParse(itemId);
+        if (id == null || !Registries.ITEM.containsId(id)) return;
+        Item targetItem = Registries.ITEM.get(id);
+
+        int remaining = amountToTake;
+        for (int i = 0; i < player.getInventory().size(); i++) {
+            ItemStack stack = player.getInventory().getStack(i);
+            if (!stack.isEmpty() && stack.isOf(targetItem)) {
+                int count = stack.getCount();
+                if (count <= remaining) {
+                    player.getInventory().setStack(i, ItemStack.EMPTY);
+                    remaining -= count;
+                } else {
+                    stack.decrement(remaining);
+                    remaining = 0;
+                }
+                if (remaining <= 0) break;
+            }
+        }
+        // Sync player inventory with client
+        player.currentScreenHandler.sendContentUpdates();
     }
 
     private static int parseIntSafe(String s) {
@@ -497,6 +600,13 @@ public class BarrelGuiHandler {
                 }
             }
             case CLEAR_VARS -> GuiVarStore.INSTANCE.clear(player.getUuid());
+            case REFRESH -> refreshCurrentGui(player);
+            case TAKE_ITEM -> {
+                String[] parts = action.value().split(":", 2);
+                String itemId = parts[0];
+                int amount = parts.length > 1 ? parseIntSafe(parts[1]) : 1;
+                takeItemCount(player, itemId, amount);
+            }
         }
         return false;
     }

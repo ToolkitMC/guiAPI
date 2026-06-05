@@ -1,0 +1,118 @@
+{
+  "title": "§dNew Features Demo §8— {player}",
+  "rows": 4,
+  "on_open": [
+    { "type": "set_var", "var": "counter", "value": "0" }
+  ],
+  "buttons": [
+    {
+      "slot": 4,
+      "item": "minecraft:player_head",
+      "name": "§d1. Dynamic UI Refresh (Flicker-Free!)",
+      "lore": [
+        "§7Current value: §f{var:counter}",
+        "§7Clicking buttons below updates the GUI",
+        "§7without opening/closing screens!"
+      ]
+    },
+    {
+      "slot": 12,
+      "item": "minecraft:lime_concrete",
+      "name": "§aAdd 1",
+      "lore": ["§7Adds 1 to counter, then refreshes dynamically."],
+      "actions": [
+        { "type": "add_var", "var": "counter", "value": "1" },
+        { "type": "sound", "value": "minecraft:entity.experience_orb.pickup:0.5:1.2" },
+        { "type": "refresh" }
+      ]
+    },
+    {
+      "slot": 13,
+      "item": "minecraft:red_concrete",
+      "name": "§cSubtract 1",
+      "lore": ["§7Subtracts 1 from counter, then refreshes dynamically."],
+      "condition": { "type": "var_gt", "value": "counter:0" },
+      "actions": [
+        { "type": "sub_var", "var": "counter", "value": "1" },
+        { "type": "sound", "value": "minecraft:entity.experience_orb.pickup:0.5:0.8" },
+        { "type": "refresh" }
+      ]
+    },
+    {
+      "slot": 20,
+      "item": "minecraft:diamond_sword",
+      "name": "§b2. Item Shop §a(Buy Iron)",
+      "lore": [
+        "§7Cost: §e5 Gold Nuggets",
+        "§7Requires nuggets in your inventory.",
+        "§7Only visible if you have enough gold!"
+      ],
+      "condition": { "type": "has_item", "value": "minecraft:gold_nugget:5" },
+      "actions": [
+        { "type": "take_item", "value": "minecraft:gold_nugget:5" },
+        { "type": "run_command", "value": "give @s minecraft:iron_ingot", "run_with": "console" },
+        { "type": "sound", "value": "minecraft:entity.villager.yes" },
+        { "type": "message", "value": "§aYou purchased 1 Iron Ingot!" },
+        { "type": "refresh" }
+      ]
+    },
+    {
+      "slot": 20,
+      "item": "minecraft:barrier",
+      "name": "§cItem Shop §7(Locked)",
+      "lore": [
+        "§7Cost: §e5 Gold Nuggets",
+        "§cYou do not have enough Gold Nuggets!"
+      ],
+      "condition": { "type": "not_item", "value": "minecraft:gold_nugget:5" },
+      "actions": [
+        { "type": "sound", "value": "minecraft:entity.villager.no" },
+        { "type": "message", "value": "§cYou need at least 5 Gold Nuggets!" }
+      ]
+    },
+    {
+      "slot": 22,
+      "item": "minecraft:paper",
+      "name": "§63. Legacy Custom Model Data",
+      "lore": [
+        "§7This item has a custom model data of 14.",
+        "§7Mapped using the traditional integer field."
+      ],
+      "custom_model_data": 14
+    },
+    {
+      "slot": 23,
+      "item": "minecraft:book",
+      "name": "§b3. 1.21.4+ Multi-Value Custom Model Data",
+      "lore": [
+        "§7This item uses the new composite",
+        "§7custom model data format (floats/flags/strings/colors)."
+      ],
+      "custom_model_data": {
+        "floats": [42.5],
+        "flags": [true, false],
+        "strings": ["custom_model_demo"],
+        "colors": [16711680]
+      }
+    },
+    {
+      "slot": 24,
+      "item": "minecraft:stick",
+      "name": "§e3. Custom Item Model",
+      "lore": [
+        "§7This item has a custom item model component set.",
+        "§7Model ID: §8my_resource_pack:item/custom_sword"
+      ],
+      "item_model": "my_resource_pack:item/custom_sword"
+    },
+    {
+      "slot": 31,
+      "item": "minecraft:barrier",
+      "name": "§cClose Demo",
+      "actions": [
+        { "type": "sound", "value": "minecraft:ui.button.click" },
+        { "type": "close" }
+      ]
+    }
+  ]
+}

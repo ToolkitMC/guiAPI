@@ -11,72 +11,7 @@ import java.util.Optional;
 /**
  * Parsed representation of a datapack GUI definition.
  *
- * JSON schema — data/<ns>/gui/<name>.json:
- * {
- *   "title": "My GUI",
- *   "rows": 3,
- *   "on_open":  [ { "type": "run_command", "value": "..." } ],  // optional
- *   "on_close": [ { "type": "run_command", "value": "..." } ],  // optional
- *   "buttons": [
- *     {
- *       "slot": 4,
- *       "page": 0,                        // optional, default 0
- *       "item": "minecraft:diamond",
- *       "name": "§bClick Me",             // supports {player}, {gui}, {page}
- *       "lore": ["§7Score: {score:coins}"],
- *       "glint": true,
- *       "click_type": "any",             // any (default) | left | right | shift
- *       "condition": {
- *         "type": "has_tag",             // has_tag | not_tag | score_gt | score_lt | score_eq
- *         "value": "my_tag"
- *       },
- *       "actions": [
- *         { "type": "run_command", "value": "/say hi", "run_with": "player" },
- *         { "type": "close" }
- *       ]
- *     },
- *     {
- *       "slot": 8,
- *       "toggle": {
- *         "tag": "my_toggle_tag",         // scoreboard tag used as toggle state
- *         "item_on":  "minecraft:lime_dye",
- *         "item_off": "minecraft:gray_dye",
- *         "name_on":  "§aEnabled",
- *         "name_off": "§7Disabled",
- *         "lore_on":  ["§7Click to disable."],
- *         "lore_off": ["§7Click to enable."],
- *         "glint_on":  false,
- *         "glint_off": false,
- *         "actions_on":  [ { "type": "run_command", "value": "tag @s remove my_toggle_tag" } ],
- *         "actions_off": [ { "type": "run_command", "value": "tag @s add my_toggle_tag" } ]
- *       }
- *     }
- *   ]
- * }
- *
- * Placeholders (resolved at render time per-player):
- *   {player}        — player's display name
- *   {gui}           — GUI ID (namespace:name)
- *   {page}          — current page index (0-based)
- *   {page1}         — current page index (1-based)
- *   {pages}         — total page count
- *   {score:obj}     — player's score in objective "obj"
- *
- * Action types:
- *   run_command  — run a command (run_with: player|console)
- *   close        — close the GUI
- *   open_gui     — open another GUI by id (value: "ns:name")
- *   message      — send chat message to player (value: text)
- *   next_page    — go to next page
- *   prev_page    — go to previous page
- *   goto_page    — go to specific page (value: page index as string)
- *
- * Condition types:
- *   has_tag      — value: tag name. Visible if player has tag.
- *   not_tag      — value: tag name. Visible if player does NOT have tag.
- *   score_gt     — value: "objective:threshold". Visible if score > threshold.
- *   score_lt     — value: "objective:threshold". Visible if score < threshold.
- *   score_eq     — value: "objective:value".     Visible if score == value.
+ * JSON schema — data/<ns>/gui/<name>.json
  */
 public class GuiDefinition {
 
@@ -100,7 +35,7 @@ public class GuiDefinition {
 
     public enum ActionType {
         RUN_COMMAND, CLOSE, OPEN_GUI, MESSAGE, NEXT_PAGE, PREV_PAGE, GOTO_PAGE, SOUND,
-        SET_VAR, ADD_VAR, SUB_VAR, RESET_VAR, CLEAR_VARS;
+        SET_VAR, ADD_VAR, SUB_VAR, RESET_VAR, CLEAR_VARS, REFRESH, TAKE_ITEM;
 
         public static ActionType fromString(String s) {
             return switch (s.toLowerCase()) {
@@ -117,6 +52,8 @@ public class GuiDefinition {
                 case "sub_var"     -> SUB_VAR;
                 case "reset_var"   -> RESET_VAR;
                 case "clear_vars"  -> CLEAR_VARS;
+                case "refresh"     -> REFRESH;
+                case "take_item"   -> TAKE_ITEM;
                 default            -> CLOSE;
             };
         }
@@ -131,7 +68,7 @@ public class GuiDefinition {
 
     public enum ConditionType {
         HAS_TAG, NOT_TAG, SCORE_GT, SCORE_LT, SCORE_EQ,
-        VAR_EQ, VAR_GT, VAR_LT, VAR_SET;
+        VAR_EQ, VAR_GT, VAR_LT, VAR_SET, HAS_ITEM, NOT_ITEM;
 
         public static ConditionType fromString(String s) {
             return switch (s.toLowerCase()) {
@@ -144,6 +81,8 @@ public class GuiDefinition {
                 case "var_gt"   -> VAR_GT;
                 case "var_lt"   -> VAR_LT;
                 case "var_set"  -> VAR_SET;
+                case "has_item" -> HAS_ITEM;
+                case "not_item" -> NOT_ITEM;
                 default         -> HAS_TAG;
             };
         }
@@ -169,6 +108,16 @@ public class GuiDefinition {
     public record ButtonCondition(ConditionType type, String value) {}
 
     /**
+     * 1.21.4+ Multi-value Custom Model Data representation
+     */
+    public record CustomModelDataConfig(
+            List<Float> floats,
+            List<Boolean> flags,
+            List<String> strings,
+            List<Integer> colors
+    ) {}
+
+    /**
      * Toggle definition — stored on a button instead of a fixed item/actions.
      * State is tracked via a scoreboard tag on the player.
      */
@@ -179,7 +128,11 @@ public class GuiDefinition {
             List<String> loreOn, List<String> loreOff,
             boolean glintOn, boolean glintOff,
             List<ButtonAction> actionsOn,
-            List<ButtonAction> actionsOff
+            List<ButtonAction> actionsOff,
+            Optional<CustomModelDataConfig> customModelDataOn,
+            Optional<CustomModelDataConfig> customModelDataOff,
+            Optional<String> itemModelOn,
+            Optional<String> itemModelOff
     ) {}
 
     /**
@@ -196,7 +149,9 @@ public class GuiDefinition {
             ClickType clickType,
             Optional<ButtonCondition> condition,
             List<ButtonAction> actions,
-            Optional<ToggleDefinition> toggle
+            Optional<ToggleDefinition> toggle,
+            Optional<CustomModelDataConfig> customModelData,
+            Optional<String> itemModel
     ) {}
 
     // ── Fields ───────────────────────────────────────────────────────────────
@@ -273,7 +228,7 @@ public class GuiDefinition {
         if (b.has("toggle") && b.get("toggle").isJsonObject()) {
             ToggleDefinition toggle = parseToggle(b.getAsJsonObject("toggle"));
             return new Button(slot, page, "", "", List.of(), false,
-                    clickType, condition, List.of(), Optional.of(toggle));
+                    clickType, condition, List.of(), Optional.of(toggle), Optional.empty(), Optional.empty());
         }
 
         // Standard button
@@ -296,7 +251,53 @@ public class GuiDefinition {
         }
         if (actions.isEmpty()) actions.add(new ButtonAction(ActionType.CLOSE, ""));
 
-        return new Button(slot, page, item, name, lore, glint, clickType, condition, actions, Optional.empty());
+        Optional<CustomModelDataConfig> customModelData = parseCustomModelData(b, "custom_model_data");
+        Optional<String> itemModel = b.has("item_model")
+                ? Optional.of(b.get("item_model").getAsString())
+                : Optional.empty();
+
+        return new Button(slot, page, item, name, lore, glint, clickType, condition, actions, Optional.empty(), customModelData, itemModel);
+    }
+
+    private static Optional<CustomModelDataConfig> parseCustomModelData(JsonObject obj, String key) {
+        if (!obj.has(key)) return Optional.empty();
+        JsonElement cmdEl = obj.get(key);
+        if (cmdEl.isJsonPrimitive()) {
+            try {
+                float floatVal = cmdEl.getAsFloat();
+                return Optional.of(new CustomModelDataConfig(
+                        List.of(floatVal), List.of(), List.of(), List.of()
+                ));
+            } catch (NumberFormatException ignored) {}
+        } else if (cmdEl.isJsonObject()) {
+            JsonObject cmdObj = cmdEl.getAsJsonObject();
+            List<Float> floats = new ArrayList<>();
+            if (cmdObj.has("floats") && cmdObj.get("floats").isJsonArray()) {
+                for (JsonElement e : cmdObj.getAsJsonArray("floats")) {
+                    floats.add(e.getAsFloat());
+                }
+            }
+            List<Boolean> flags = new ArrayList<>();
+            if (cmdObj.has("flags") && cmdObj.get("flags").isJsonArray()) {
+                for (JsonElement e : cmdObj.getAsJsonArray("flags")) {
+                    flags.add(e.getAsBoolean());
+                }
+            }
+            List<String> strings = new ArrayList<>();
+            if (cmdObj.has("strings") && cmdObj.get("strings").isJsonArray()) {
+                for (JsonElement e : cmdObj.getAsJsonArray("strings")) {
+                    strings.add(e.getAsString());
+                }
+            }
+            List<Integer> colors = new ArrayList<>();
+            if (cmdObj.has("colors") && cmdObj.get("colors").isJsonArray()) {
+                for (JsonElement e : cmdObj.getAsJsonArray("colors")) {
+                    colors.add(e.getAsInt());
+                }
+            }
+            return Optional.of(new CustomModelDataConfig(floats, flags, strings, colors));
+        }
+        return Optional.empty();
     }
 
     private static ToggleDefinition parseToggle(JsonObject t) {
@@ -328,8 +329,15 @@ public class GuiDefinition {
         if (actionsOff.isEmpty())
             actionsOff.add(new ButtonAction(ActionType.RUN_COMMAND, "tag @s add " + tag, RunWith.CONSOLE));
 
+        Optional<CustomModelDataConfig> customModelDataOn  = parseCustomModelData(t, "custom_model_data_on");
+        Optional<CustomModelDataConfig> customModelDataOff = parseCustomModelData(t, "custom_model_data_off");
+
+        Optional<String> itemModelOn  = t.has("item_model_on")  ? Optional.of(t.get("item_model_on").getAsString())  : Optional.empty();
+        Optional<String> itemModelOff = t.has("item_model_off") ? Optional.of(t.get("item_model_off").getAsString()) : Optional.empty();
+
         return new ToggleDefinition(tag, itemOn, itemOff, nameOn, nameOff,
-                loreOn, loreOff, glintOn, glintOff, actionsOn, actionsOff);
+                loreOn, loreOff, glintOn, glintOff, actionsOn, actionsOff,
+                customModelDataOn, customModelDataOff, itemModelOn, itemModelOff);
     }
 
     private static List<String> parseStringList(JsonObject obj, String key) {

@@ -7,7 +7,7 @@ No client mod required. No macros. No external dependencies beyond Fabric API.
 
 ## Installation
 
-1. Drop `guiapi-1.0.3.jar` into your `mods/` folder.
+1. Drop `guiapi-1.0.4.jar` into your `mods/` folder.
 2. Drop your datapack into `world/datapacks/`.
 3. Run `/reload` or `/guiapi reload`.
 
@@ -74,6 +74,8 @@ The GUI ID used in commands is `<namespace>:<name>` — matching the file path u
 | `name` | string | `""` | Display name. Supports color codes and placeholders. |
 | `lore` | string[] | `[]` | Lore lines. Supports placeholders. |
 | `glint` | boolean | `false` | Apply enchantment glint effect. |
+| `custom_model_data` | int or object | — | Sets custom model data component (supports legacy int and 1.21.4+ composite object formats). |
+| `item_model` | string | — | Sets the custom item model component ID (1.21.2+). |
 | `click_type` | string | `"any"` | Which click triggers actions: `any` · `left` · `right` · `shift` |
 | `condition` | object | — | Visibility condition (see below). |
 | `actions` | action[] | `[close]` | Actions executed in order on click. |
@@ -121,6 +123,8 @@ Supported in `title`, button `name`, `lore`, `message` values, and `run_command`
 | `next_page` | — | — | Go to the next page. |
 | `prev_page` | — | — | Go to the previous page. |
 | `goto_page` | Page index (string) | — | Jump to a specific page. |
+| `refresh` | — | — | Refresh the current GUI inventory dynamically (no closing/flicker). |
+| `take_item` | `itemId:amount` | — | Deducts a specified amount of an item from the player's inventory. |
 
 Multiple actions are executed in order. `close`, `open_gui`, `next_page`, `prev_page`, and `goto_page` stop the chain after executing.
 
@@ -139,6 +143,8 @@ Conditions control button **visibility**. Hidden buttons cannot be clicked.
 | `var_gt` | `"key:value"` | Runtime variable `key` (int) > `value` |
 | `var_lt` | `"key:value"` | Runtime variable `key` (int) < `value` |
 | `var_set` | `key` | Runtime variable `key` is set (any value) |
+| `has_item` | `"itemId:amount"` | Player has at least `amount` of `itemId` in inventory |
+| `not_item` | `"itemId:amount"` | Player has less than `amount` of `itemId` in inventory |
 
 ### Toggle buttons
 
@@ -330,7 +336,7 @@ Variables are per-player, in-memory, and cleared when the GUI closes.
 
 ```bash
 ./gradlew build
-# Output: build/libs/guiapi-1.0.3.jar
+# Output: build/libs/guiapi-1.0.4.jar
 ```
 
 Requires **Java 21**.
