@@ -332,13 +332,32 @@ public class BarrelGuiHandler {
             }
         }
 
-        // --- Tooltip Control ---
+        // --- Tooltip Control (1.21.4+ TOOLTIP_DISPLAY Component) ---
         if (hideTooltip) {
-            stack.set(DataComponentTypes.HIDE_TOOLTIP, net.minecraft.util.Unit.INSTANCE);
+            net.minecraft.component.type.TooltipDisplayComponent tooltipDisplay = stack.getOrDefault(
+                DataComponentTypes.TOOLTIP_DISPLAY,
+                net.minecraft.component.type.TooltipDisplayComponent.DEFAULT
+            );
+            tooltipDisplay = tooltipDisplay
+                .with(DataComponentTypes.CUSTOM_NAME, true)
+                .with(DataComponentTypes.ITEM_NAME, true)
+                .with(DataComponentTypes.LORE, true);
+            stack.set(DataComponentTypes.TOOLTIP_DISPLAY, tooltipDisplay);
         }
 
         if (hideAdditionalTooltip) {
-            stack.set(DataComponentTypes.HIDE_ADDITIONAL_TOOLTIP, net.minecraft.util.Unit.INSTANCE);
+            net.minecraft.component.type.TooltipDisplayComponent tooltipDisplay = stack.getOrDefault(
+                DataComponentTypes.TOOLTIP_DISPLAY,
+                net.minecraft.component.type.TooltipDisplayComponent.DEFAULT
+            );
+            tooltipDisplay = tooltipDisplay
+                .with(DataComponentTypes.ATTRIBUTE_MODIFIERS, true)
+                .with(DataComponentTypes.ENCHANTMENTS, true)
+                .with(DataComponentTypes.STORED_ENCHANTMENTS, true)
+                .with(DataComponentTypes.DYED_COLOR, true)
+                .with(DataComponentTypes.POTION_CONTENTS, true)
+                .with(DataComponentTypes.UNBREAKABLE, true);
+            stack.set(DataComponentTypes.TOOLTIP_DISPLAY, tooltipDisplay);
         }
 
         return stack;
@@ -679,6 +698,26 @@ public class BarrelGuiHandler {
     }
 
     // ── Score helpers ─────────────────────────────────────────────────────────
+
+    private static void modifyScore(ServerPlayerEntity player, String objectiveName, int val, ScoreModType modType) {
+        try {
+            Scoreboard sb = player.getServer().getScoreboard();
+            ScoreboardObjective obj = sb.getNullableObjective(objectiveName);
+            if (obj == null) return;
+            net.minecraft.scoreboard.ScoreAccess score = sb.getOrCreateScore(ScoreHolder.fromName(player.getNameForScoreboard()), obj);
+            if (score != null) {
+                int current = score.getScore();
+                int target = switch (modType) {
+                    case SET -> val;
+                    case ADD -> current + val;
+                    case SUB -> current - val;
+                };
+                score.setScore(target);
+            }
+        } catch (Exception e) {
+            GuiApiMod.LOGGER.error("[GuiAPI] Failed to modify score for player {}", player.getNameForScoreboard(), e);
+        }
+    }
 
     private static int getScore(ServerPlayerEntity player, String[] parts, int objIndex) {
         if (parts.length <= objIndex) return 0;
