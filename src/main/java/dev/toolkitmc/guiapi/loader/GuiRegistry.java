@@ -102,6 +102,10 @@ public class GuiRegistry extends SinglePreparationResourceReloader<Map<Identifie
         return Map.copyOf(definitions);
     }
 
+    public void put(Identifier id, GuiDefinition def) {
+        definitions.put(id, def);
+    }
+
     /**
      * Addon API — register a GUI definition from Java code (e.g. another Fabric mod).
      * Addon registrations survive a datapack reload; they are re-applied after every
