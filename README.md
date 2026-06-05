@@ -132,6 +132,9 @@ Supported in `title`, button `name`, `lore`, `message` values, and `run_command`
 | `add_score` | `objective:value` | — | Adds a value to a player scoreboard objective directly (supports placeholders). |
 | `sub_score` | `objective:value` | — | Subtracts a value from a player scoreboard objective directly (supports placeholders). |
 | `action_bar` | Text string | — | Sends an action bar message directly to the player. Supports placeholders. |
+| `add_effect` | `effect_id:duration:amplifier:particles` | — | Gives the player a status effect (duration in seconds, particles true/false). |
+| `remove_effect` | `effect_id` | — | Removes a specific status effect from the player. |
+| `clear_effects` | — | — | Clears all status effects from the player. |
 
 Multiple actions are executed in order. `close`, `open_gui`, `next_page`, `prev_page`, and `goto_page` stop the chain after executing.
 
@@ -152,6 +155,12 @@ Conditions control button **visibility**. Hidden buttons cannot be clicked.
 | `var_set` | `key` | Runtime variable `key` is set (any value) |
 | `has_item` | `"itemId:amount"` | Player has at least `amount` of `itemId` in inventory |
 | `not_item` | `"itemId:amount"` | Player has less than `amount` of `itemId` in inventory |
+| `level_gt` | `value` | Player's XP level > value |
+| `level_lt` | `value` | Player's XP level < value |
+| `health_gt` | `value` | Player's current health > value |
+| `health_lt` | `value` | Player's current health < value |
+| `food_gt` | `value` | Player's hunger level > value |
+| `food_lt` | `value` | Player's hunger level < value |
 
 ### Toggle buttons
 

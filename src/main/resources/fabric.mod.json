@@ -24,6 +24,9 @@
     "main": [
       "dev.toolkitmc.guiapi.GuiApiMod"
     ],
+    "client": [
+      "dev.toolkitmc.guiapi.client.GuiApiClient"
+    ],
     "modmenu": [
       "dev.toolkitmc.guiapi.modmenu.GuiApiModMenuEntry"
     ]

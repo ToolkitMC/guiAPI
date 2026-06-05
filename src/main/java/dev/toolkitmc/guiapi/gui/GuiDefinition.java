@@ -36,7 +36,8 @@ public class GuiDefinition {
     public enum ActionType {
         RUN_COMMAND, CLOSE, OPEN_GUI, MESSAGE, NEXT_PAGE, PREV_PAGE, GOTO_PAGE, SOUND,
         SET_VAR, ADD_VAR, SUB_VAR, RESET_VAR, CLEAR_VARS, REFRESH, TAKE_ITEM,
-        SET_SCORE, ADD_SCORE, SUB_SCORE, ACTION_BAR;
+        SET_SCORE, ADD_SCORE, SUB_SCORE, ACTION_BAR,
+        ADD_EFFECT, REMOVE_EFFECT, CLEAR_EFFECTS;
 
         public static ActionType fromString(String s) {
             return switch (s.toLowerCase()) {
@@ -59,6 +60,9 @@ public class GuiDefinition {
                 case "add_score"   -> ADD_SCORE;
                 case "sub_score"   -> SUB_SCORE;
                 case "action_bar"  -> ACTION_BAR;
+                case "add_effect"     -> ADD_EFFECT;
+                case "remove_effect"  -> REMOVE_EFFECT;
+                case "clear_effects"  -> CLEAR_EFFECTS;
                 default            -> CLOSE;
             };
         }
@@ -73,22 +77,29 @@ public class GuiDefinition {
 
     public enum ConditionType {
         HAS_TAG, NOT_TAG, SCORE_GT, SCORE_LT, SCORE_EQ,
-        VAR_EQ, VAR_GT, VAR_LT, VAR_SET, HAS_ITEM, NOT_ITEM;
+        VAR_EQ, VAR_GT, VAR_LT, VAR_SET, HAS_ITEM, NOT_ITEM,
+        LEVEL_GT, LEVEL_LT, HEALTH_GT, HEALTH_LT, FOOD_GT, FOOD_LT;
 
         public static ConditionType fromString(String s) {
             return switch (s.toLowerCase()) {
-                case "has_tag"  -> HAS_TAG;
-                case "not_tag"  -> NOT_TAG;
-                case "score_gt" -> SCORE_GT;
-                case "score_lt" -> SCORE_LT;
-                case "score_eq" -> SCORE_EQ;
-                case "var_eq"   -> VAR_EQ;
-                case "var_gt"   -> VAR_GT;
-                case "var_lt"   -> VAR_LT;
-                case "var_set"  -> VAR_SET;
-                case "has_item" -> HAS_ITEM;
-                case "not_item" -> NOT_ITEM;
-                default         -> HAS_TAG;
+                case "has_tag"   -> HAS_TAG;
+                case "not_tag"   -> NOT_TAG;
+                case "score_gt"  -> SCORE_GT;
+                case "score_lt"  -> SCORE_LT;
+                case "score_eq"  -> SCORE_EQ;
+                case "var_eq"    -> VAR_EQ;
+                case "var_gt"    -> VAR_GT;
+                case "var_lt"    -> VAR_LT;
+                case "var_set"   -> VAR_SET;
+                case "has_item"  -> HAS_ITEM;
+                case "not_item"  -> NOT_ITEM;
+                case "level_gt"  -> LEVEL_GT;
+                case "level_lt"  -> LEVEL_LT;
+                case "health_gt" -> HEALTH_GT;
+                case "health_lt" -> HEALTH_LT;
+                case "food_gt"   -> FOOD_GT;
+                case "food_lt"   -> FOOD_LT;
+                default          -> HAS_TAG;
             };
         }
     }
@@ -100,13 +111,14 @@ public class GuiDefinition {
      * @param value   Primary value (command, message, sound id, var value, page index…)
      * @param runWith Execution context for run_command
      * @param var     Variable key for set_var / add_var / sub_var / reset_var actions
+     * @param delay   Action execution delay in ticks
      */
-    public record ButtonAction(ActionType type, String value, RunWith runWith, String var) {
+    public record ButtonAction(ActionType type, String value, RunWith runWith, String var, int delay) {
         public ButtonAction(ActionType type, String value) {
-            this(type, value, RunWith.PLAYER, "");
+            this(type, value, RunWith.PLAYER, "", 0);
         }
         public ButtonAction(ActionType type, String value, RunWith runWith) {
-            this(type, value, runWith, "");
+            this(type, value, runWith, "", 0);
         }
     }
 
@@ -120,6 +132,16 @@ public class GuiDefinition {
             List<Boolean> flags,
             List<String> strings,
             List<Integer> colors
+    ) {}
+
+    /**
+     * Background Filler configuration
+     */
+    public record FillerConfig(
+            String item,
+            String name,
+            boolean glint,
+            boolean hideTooltip
     ) {}
 
     /**
@@ -177,13 +199,19 @@ public class GuiDefinition {
     private final List<Button> buttons;
     private final List<ButtonAction> onOpen;
     private final List<ButtonAction> onClose;
+    private final Optional<FillerConfig> filler;
+    private final int tickRate;
+    private final boolean closeOnMove;
 
     // ── Constructor ──────────────────────────────────────────────────────────
 
     private GuiDefinition(Identifier id, String title, int rows,
                           List<Button> buttons,
                           List<ButtonAction> onOpen,
-                          List<ButtonAction> onClose) {
+                          List<ButtonAction> onClose,
+                          Optional<FillerConfig> filler,
+                          int tickRate,
+                          boolean closeOnMove) {
         this.id        = id;
         this.title     = title;
         this.rows      = rows;
@@ -191,6 +219,9 @@ public class GuiDefinition {
         this.onOpen    = onOpen;
         this.onClose   = onClose;
         this.pageCount = buttons.stream().mapToInt(Button::page).max().orElse(0) + 1;
+        this.filler    = filler;
+        this.tickRate  = tickRate;
+        this.closeOnMove = closeOnMove;
     }
 
     // ── Parser ───────────────────────────────────────────────────────────────
@@ -209,7 +240,20 @@ public class GuiDefinition {
         List<ButtonAction> onOpen  = parseActionList(obj, "on_open");
         List<ButtonAction> onClose = parseActionList(obj, "on_close");
 
-        return new GuiDefinition(id, title, rows, buttons, onOpen, onClose);
+        Optional<FillerConfig> filler = Optional.empty();
+        if (obj.has("filler") && obj.get("filler").isJsonObject()) {
+            JsonObject f = obj.getAsJsonObject("filler");
+            String fItem = f.has("item") ? f.get("item").getAsString() : "minecraft:gray_stained_glass_pane";
+            String fName = f.has("name") ? f.get("name").getAsString() : " ";
+            boolean fGlint = f.has("glint") && f.get("glint").getAsBoolean();
+            boolean fHideTooltip = !f.has("hide_tooltip") || f.get("hide_tooltip").getAsBoolean();
+            filler = Optional.of(new FillerConfig(fItem, fName, fGlint, fHideTooltip));
+        }
+
+        int tickRate = obj.has("tick_rate") ? obj.get("tick_rate").getAsInt() : 0;
+        boolean closeOnMove = obj.has("close_on_move") && obj.get("close_on_move").getAsBoolean();
+
+        return new GuiDefinition(id, title, rows, buttons, onOpen, onClose, filler, tickRate, closeOnMove);
     }
 
     private static List<ButtonAction> parseActionList(JsonObject obj, String key) {
@@ -386,7 +430,8 @@ public class GuiDefinition {
         RunWith runWith = a.has("run_with")
                 ? RunWith.fromString(a.get("run_with").getAsString())
                 : RunWith.PLAYER;
-        return new ButtonAction(type, value, runWith, var);
+        int delay = a.has("delay") ? Math.max(0, a.get("delay").getAsInt()) : 0;
+        return new ButtonAction(type, value, runWith, var, delay);
     }
 
     // ── Getters ──────────────────────────────────────────────────────────────
@@ -399,6 +444,9 @@ public class GuiDefinition {
     public List<Button> getButtons()       { return buttons; }
     public List<ButtonAction> getOnOpen()  { return onOpen; }
     public List<ButtonAction> getOnClose() { return onClose; }
+    public Optional<FillerConfig> getFiller() { return filler; }
+    public int getTickRate()               { return tickRate; }
+    public boolean isCloseOnMove()         { return closeOnMove; }
 
     /** Returns only buttons belonging to the given page. */
     public List<Button> getButtonsForPage(int page) {

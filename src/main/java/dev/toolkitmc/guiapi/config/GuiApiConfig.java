@@ -18,6 +18,8 @@ import java.nio.file.Path;
  *   allow_console_run_with  — whether run_with:console actions are allowed (default: true)
  *   log_unknown_items       — WARN when an unknown item ID is used in a button (default: true)
  *   log_unknown_sounds      — WARN when an unknown sound ID is used in a sound action (default: true)
+ *   allow_close_on_move     — whether close_on_move is enabled globally (default: true)
+ *   allow_delayed_actions   — whether action delays are executed globally (default: true)
  */
 public final class GuiApiConfig {
 
@@ -34,6 +36,8 @@ public final class GuiApiConfig {
     private boolean logUnknownSounds    = true;
     private int     permissionLevel     = 2;
     private boolean debugMode           = false;
+    private boolean allowCloseOnMove    = true;
+    private boolean allowDelayedActions = true;
 
     private GuiApiConfig() {}
 
@@ -59,6 +63,10 @@ public final class GuiApiConfig {
                 permissionLevel = Math.clamp(obj.get("permission_level").getAsInt(), 0, 4);
             if (obj.has("debug_mode"))
                 debugMode = obj.get("debug_mode").getAsBoolean();
+            if (obj.has("allow_close_on_move"))
+                allowCloseOnMove = obj.get("allow_close_on_move").getAsBoolean();
+            if (obj.has("allow_delayed_actions"))
+                allowDelayedActions = obj.get("allow_delayed_actions").getAsBoolean();
 
         } catch (IOException e) {
             GuiApiMod.LOGGER.error("[GuiAPI] Failed to load config: {}", e.getMessage());
@@ -72,6 +80,8 @@ public final class GuiApiConfig {
         obj.addProperty("log_unknown_sounds",      logUnknownSounds);
         obj.addProperty("permission_level",        permissionLevel);
         obj.addProperty("debug_mode",              debugMode);
+        obj.addProperty("allow_close_on_move",     allowCloseOnMove);
+        obj.addProperty("allow_delayed_actions",   allowDelayedActions);
         try {
             Files.writeString(CONFIG_PATH, GSON.toJson(obj));
         } catch (IOException e) {
@@ -93,4 +103,10 @@ public final class GuiApiConfig {
 
     public boolean isDebugMode()                  { return debugMode; }
     public void setDebugMode(boolean v)           { debugMode = v; }
+
+    public boolean isAllowCloseOnMove()           { return allowCloseOnMove; }
+    public void setAllowCloseOnMove(boolean v)    { allowCloseOnMove = v; }
+
+    public boolean isAllowDelayedActions()         { return allowDelayedActions; }
+    public void setAllowDelayedActions(boolean v)  { allowDelayedActions = v; }
 }

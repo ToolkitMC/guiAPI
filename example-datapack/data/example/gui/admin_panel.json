@@ -1,6 +1,13 @@
 {
   "title": "§6Admin Panel §8— {player}",
   "rows": 3,
+  "close_on_move": true,
+  "filler": {
+    "item": "minecraft:black_stained_glass_pane",
+    "name": " ",
+    "glint": false,
+    "hide_tooltip": true
+  },
   "on_open": [
     { "type": "run_command", "value": "tag @s add in_admin_panel", "run_with": "console" },
     { "type": "sound", "value": "minecraft:block.note_block.pling:1.0:1.2" }

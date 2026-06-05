@@ -34,6 +34,8 @@ public class GuiApiModMenuEntry implements ModMenuApi {
         private boolean logUnknownSounds;
         private int     permissionLevel;
         private boolean debugMode;
+        private boolean allowCloseOnMove;
+        private boolean allowDelayedActions;
 
         GuiApiConfigScreen(Screen parent) {
             super(Text.literal("GUI API — Settings"));
@@ -44,12 +46,14 @@ public class GuiApiModMenuEntry implements ModMenuApi {
             this.logUnknownSounds    = cfg.isLogUnknownSounds();
             this.permissionLevel     = cfg.getPermissionLevel();
             this.debugMode           = cfg.isDebugMode();
+            this.allowCloseOnMove    = cfg.isAllowCloseOnMove();
+            this.allowDelayedActions = cfg.isAllowDelayedActions();
         }
 
         @Override
         protected void init() {
             int cx = width / 2;
-            int y  = 45;
+            int y  = 40;
 
             // ── Settings ─────────────────────────────────────────────────────
 
@@ -58,28 +62,42 @@ public class GuiApiModMenuEntry implements ModMenuApi {
                     "Permit buttons to run commands with console (OP-level) permission.",
                     allowConsoleRunWith,
                     v -> allowConsoleRunWith = v);
-            y += 28;
+            y += 24;
 
             addToggle(cx, y, "log_unknown_items",
                     "Log unknown item IDs",
                     "Print a WARN to the log when a button uses an unrecognized item ID.",
                     logUnknownItems,
                     v -> logUnknownItems = v);
-            y += 28;
+            y += 24;
 
             addToggle(cx, y, "log_unknown_sounds",
                     "Log unknown sound IDs",
                     "Print a WARN to the log when a sound action uses an unrecognized sound ID.",
                     logUnknownSounds,
                     v -> logUnknownSounds = v);
-            y += 28;
+            y += 24;
 
             addToggle(cx, y, "debug_mode",
                     "Debug mode",
                     "Log GUI open/close, action execution and placeholder resolution to console.",
                     debugMode,
                     v -> debugMode = v);
-            y += 28;
+            y += 24;
+
+            addToggle(cx, y, "allow_close_on_move",
+                    "Allow close_on_move",
+                    "Globally permit menus to close automatically when players walk away.",
+                    allowCloseOnMove,
+                    v -> allowCloseOnMove = v);
+            y += 24;
+
+            addToggle(cx, y, "allow_delayed_actions",
+                    "Allow action delays",
+                    "Globally permit action chains to execute with tick delays.",
+                    allowDelayedActions,
+                    v -> allowDelayedActions = v);
+            y += 24;
 
             // Permission level — cycle 0-4
             addDrawableChild(new TextWidget(cx - 150, y + 4, 200, 10,
@@ -88,7 +106,7 @@ public class GuiApiModMenuEntry implements ModMenuApi {
                 permissionLevel = (permissionLevel + 1) % 5;
                 btn.setMessage(permLevelText(permissionLevel));
             }).dimensions(cx + 60, y, 40, 20).build());
-            y += 40;
+            y += 30;
 
             // ── Loaded GUI list ───────────────────────────────────────────────
             var all = GuiRegistry.INSTANCE.getAll();
@@ -97,13 +115,13 @@ public class GuiApiModMenuEntry implements ModMenuApi {
                     Text.literal("§7Loaded GUIs: §f" + count +
                             (count == 0 ? " §c(join a world to load datapacks)" : "")),
                     textRenderer));
-            y += 14;
+            y += 12;
 
             int shown = 0;
             for (var entry : all.entrySet()) {
-                if (shown >= 8) {
+                if (shown >= 5) {
                     addDrawableChild(new TextWidget(cx - 150, y, 300, 10,
-                            Text.literal("§8... and " + (count - 8) + " more"), textRenderer));
+                            Text.literal("§8... and " + (count - 5) + " more"), textRenderer));
                     break;
                 }
                 var def = entry.getValue();
@@ -111,7 +129,7 @@ public class GuiApiModMenuEntry implements ModMenuApi {
                         Text.literal("§a" + entry.getKey() +
                                 " §8[rows=" + def.getRows() + ", pages=" + def.getPageCount() + "]"),
                         textRenderer));
-                y += 12;
+                y += 10;
                 shown++;
             }
 
@@ -123,9 +141,11 @@ public class GuiApiModMenuEntry implements ModMenuApi {
                 cfg.setLogUnknownSounds(logUnknownSounds);
                 cfg.setPermissionLevel(permissionLevel);
                 cfg.setDebugMode(debugMode);
+                cfg.setAllowCloseOnMove(allowCloseOnMove);
+                cfg.setAllowDelayedActions(allowDelayedActions);
                 cfg.save();
                 MinecraftClient.getInstance().setScreen(parent);
-            }).dimensions(cx - 105, height - 30, 100, 20).build());
+            }).dimensions(cx - 105, height - 25, 100, 20).build());
 
             addDrawableChild(ButtonWidget.builder(Text.literal("Reload GUIs"), btn -> {
                 var client = MinecraftClient.getInstance();
@@ -136,11 +156,11 @@ public class GuiApiModMenuEntry implements ModMenuApi {
                 } else {
                     btn.setMessage(Text.literal("§cNot in-game"));
                 }
-            }).dimensions(cx - 0, height - 30, 100, 20).build());
+            }).dimensions(cx - 0, height - 25, 100, 20).build());
 
             addDrawableChild(ButtonWidget.builder(Text.literal("Cancel"), btn ->
                     MinecraftClient.getInstance().setScreen(parent))
-                    .dimensions(cx + 105, height - 30, 100, 20).build());
+                    .dimensions(cx + 105, height - 25, 100, 20).build());
         }
 
         @Override
@@ -148,9 +168,9 @@ public class GuiApiModMenuEntry implements ModMenuApi {
             super.render(ctx, mouseX, mouseY, delta);
             // Title
             ctx.drawCenteredTextWithShadow(textRenderer,
-                    Text.literal("§6GUI API §7Settings"), width / 2, 15, 0xFFFFFF);
+                    Text.literal("§6GUI API §7Settings"), width / 2, 10, 0xFFFFFF);
             // Divider above buttons
-            ctx.fill(width / 2 - 150, height - 40, width / 2 + 150, height - 39, 0x44FFFFFF);
+            ctx.fill(width / 2 - 150, height - 32, width / 2 + 150, height - 31, 0x44FFFFFF);
         }
 
         @Override

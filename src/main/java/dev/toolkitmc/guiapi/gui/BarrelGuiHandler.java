@@ -36,7 +36,7 @@ import java.util.Optional;
  * Features:
  *  - Multi-page support (page tracked per player)
  *  - Toggle buttons (tag-backed on/off state)
- *  - Conditional buttons (has_tag, not_tag, score_gt/lt/eq, has_item, not_item)
+ *  - Conditional buttons (has_tag, not_tag, score_gt/lt/eq, has_item, not_item, level, health, food)
  *  - Multiple actions per button (executed in order)
  *  - on_open / on_close action hooks
  *  - Placeholder substitution in text fields
@@ -47,15 +47,50 @@ import java.util.Optional;
  *  - item_model and 1.21.4+ custom_model_data support
  *  - Dynamic stack amount (amount field with placeholders)
  *  - Scoreboard manipulation (set_score, add_score, sub_score) & action_bar actions
- *  - Tooltip Controls (hide_tooltip and hide_additional_tooltip)
+ *  - Tooltip Controls (hide_tooltip and hide_additional_tooltip via 1.21.4+ TOOLTIP_DISPLAY)
+ *  - RPG/Survival status conditions (level, health, food)
+ *  - Lightweight potion status effect actions (add_effect, remove_effect, clear_effects)
+ *  - Top-level background filler support (filler JSON object)
+ *  - Top-level auto-refresh tick support (tick_rate JSON field)
+ *  - Action delay scheduling ("delay": int on actions)
+ *  - Anti-exploit movement gating ("close_on_move": true)
  */
 public class BarrelGuiHandler {
 
     /** Player UUID → currently open GUI state */
-    private static final java.util.concurrent.ConcurrentHashMap<UUID, OpenState> OPEN_GUIS =
+    private static final java.util.concurrent.ConcurrentHashMap<UUID, PlayerTickState> OPEN_GUIS =
             new java.util.concurrent.ConcurrentHashMap<>();
 
-    private record OpenState(GuiDefinition def, int page) {}
+    // Delayed Task Engine queue
+    private static final java.util.concurrent.ConcurrentLinkedQueue<DelayedTask> PENDING_TASKS =
+            new java.util.concurrent.ConcurrentLinkedQueue<>();
+
+    private static class PlayerTickState {
+        final GuiDefinition def;
+        final int page;
+        int ticksElapsed;
+        final double openX;
+        final double openY;
+        final double openZ;
+
+        PlayerTickState(GuiDefinition def, int page, ServerPlayerEntity player) {
+            this.def = def;
+            this.page = page;
+            this.ticksElapsed = 0;
+            this.openX = player.getX();
+            this.openY = player.getY();
+            this.openZ = player.getZ();
+        }
+    }
+
+    private record DelayedTask(
+            UUID playerUuid,
+            List<GuiDefinition.ButtonAction> actions,
+            int startIndex,
+            int ticksRemaining,
+            GuiDefinition def,
+            int page
+    ) {}
 
     private enum ScoreModType { SET, ADD, SUB }
 
@@ -79,7 +114,7 @@ public class BarrelGuiHandler {
 
         // Register state BEFORE building inventory so that any handleClick call
         // triggered during screen open (edge case) already sees the correct state.
-        OPEN_GUIS.put(player.getUuid(), new OpenState(def, page));
+        OPEN_GUIS.put(player.getUuid(), new PlayerTickState(def, page, player));
         debug("open: player={} gui={} page={}", player.getNameForScoreboard(), def.getId(), page);
         SimpleInventory inv = buildInventory(player, def, page, rows * 9);
 
@@ -105,6 +140,60 @@ public class BarrelGuiHandler {
         }
     }
 
+    public static void tick(MinecraftServer server) {
+        // 1. Tick auto-refresh (tick_rate) and check close_on_move
+        for (Map.Entry<UUID, PlayerTickState> entry : OPEN_GUIS.entrySet()) {
+            UUID uuid = entry.getKey();
+            PlayerTickState state = entry.getValue();
+            ServerPlayerEntity player = server.getPlayerManager().getPlayer(uuid);
+
+            if (player == null) {
+                OPEN_GUIS.remove(uuid);
+                continue;
+            }
+
+            // Check close_on_move
+            if (state.def.isCloseOnMove() && dev.toolkitmc.guiapi.config.GuiApiConfig.INSTANCE.isAllowCloseOnMove()) {
+                double dx = player.getX() - state.openX;
+                double dy = player.getY() - state.openY;
+                double dz = player.getZ() - state.openZ;
+                double distSq = dx * dx + dy * dy + dz * dz;
+                if (distSq > 2.25) { // 1.5 blocks distance squared = 2.25
+                    player.closeHandledScreen();
+                    player.sendMessage(Text.literal("§cGUI closed due to movement!"), true);
+                    continue;
+                }
+            }
+
+            if (state.def.getTickRate() > 0) {
+                state.ticksElapsed++;
+                if (state.ticksElapsed >= state.def.getTickRate()) {
+                    state.ticksElapsed = 0;
+                    refreshCurrentGui(player);
+                }
+            }
+        }
+
+        // 2. Tick pending delayed action tasks
+        int taskCount = PENDING_TASKS.size();
+        for (int i = 0; i < taskCount; i++) {
+            DelayedTask task = PENDING_TASKS.poll();
+            if (task == null) break;
+
+            ServerPlayerEntity player = server.getPlayerManager().getPlayer(task.playerUuid);
+            if (player == null) continue; // Player went offline, drop task
+
+            int remaining = task.ticksRemaining - 1;
+            if (remaining <= 0) {
+                // Time to execute the next action!
+                executeDelayedActionChain(player, task.def, task.page, task.actions, task.startIndex);
+            } else {
+                // Re-queue with decremented tick count
+                PENDING_TASKS.add(new DelayedTask(task.playerUuid, task.actions, task.startIndex, remaining, task.def, task.page));
+            }
+        }
+    }
+
     public static void refreshCurrentGui(ServerPlayerEntity player) {
         if (player.currentScreenHandler instanceof GuiScreenHandler guiHandler) {
             GuiDefinition def = guiHandler.getDefinition();
@@ -124,6 +213,18 @@ public class BarrelGuiHandler {
                 if (!evaluateCondition(player, btn)) continue;
                 inv.setStack(btn.slot(), buildStack(player, def, page, btn));
             }
+
+            // Apply background filler for empty slots
+            if (def.getFiller().isPresent()) {
+                GuiDefinition.FillerConfig fill = def.getFiller().get();
+                ItemStack fillStack = buildFillerStack(fill);
+                for (int slot = 0; slot < size; slot++) {
+                    if (inv.getStack(slot).isEmpty()) {
+                        inv.setStack(slot, fillStack.copy());
+                    }
+                }
+            }
+
             // Send content updates to client
             guiHandler.sendContentUpdates();
             debug("refreshCurrentGui: player={} gui={} page={}", player.getNameForScoreboard(), def.getId(), page);
@@ -167,26 +268,29 @@ public class BarrelGuiHandler {
                 if (wasOn) player.removeCommandTag(tgl.tag());
                 else       player.addCommandTag(tgl.tag());
 
-                // Execute all defined actions. Default tag commands were already
-                // applied above; run everything else (sounds, messages, commands…).
-                boolean chainBroken = false;
-                for (GuiDefinition.ButtonAction action : toggleActions) {
-                    boolean shouldBreak = executeAction(player, def, page, action);
-                    if (shouldBreak) { chainBroken = true; break; }
-                }
-                if (!chainBroken) {
-                    refreshCurrentGui(player);
-                }
+                // Execute all defined actions using Delayed Action Chain Engine
+                executeDelayedActionChain(player, def, page, toggleActions, 0);
                 return true;
             }
 
-            for (GuiDefinition.ButtonAction action : actions) {
-                boolean shouldBreak = executeAction(player, def, page, action);
-                if (shouldBreak) break;
-            }
+            // Execute standard click action chain using Delayed Action Chain Engine
+            executeDelayedActionChain(player, def, page, actions, 0);
             return true;
         }
         return true;
+    }
+
+    public static void executeDelayedActionChain(ServerPlayerEntity player, GuiDefinition def, int page, List<GuiDefinition.ButtonAction> actions, int startIndex) {
+        for (int i = startIndex; i < actions.size(); i++) {
+            GuiDefinition.ButtonAction action = actions.get(i);
+            if (action.delay() > 0 && dev.toolkitmc.guiapi.config.GuiApiConfig.INSTANCE.isAllowDelayedActions()) {
+                // Schedule remaining actions starting from this delayed one!
+                PENDING_TASKS.add(new DelayedTask(player.getUuid(), actions, i, action.delay(), def, page));
+                break;
+            }
+            boolean shouldBreak = executeAction(player, def, page, action);
+            if (shouldBreak) break;
+        }
     }
 
     public static void onClose(UUID playerUuid) {
@@ -202,11 +306,11 @@ public class BarrelGuiHandler {
      * Fires on_close actions and clears runtime variables.
      */
     public static void onClose(ServerPlayerEntity player) {
-        OpenState state = OPEN_GUIS.remove(player.getUuid());
+        PlayerTickState state = OPEN_GUIS.remove(player.getUuid());
         if (state == null) return;
-        debug("close: player={} gui={}", player.getNameForScoreboard(), state.def().getId());
-        for (GuiDefinition.ButtonAction action : state.def().getOnClose()) {
-            executeAction(player, state.def(), state.page(), action);
+        debug("close: player={} gui={}", player.getNameForScoreboard(), state.def.getId());
+        for (GuiDefinition.ButtonAction action : state.def.getOnClose()) {
+            executeAction(player, state.def, state.page, action);
         }
         // Only clear vars on a real close, not on GUI navigation (open_gui, next/prev_page).
         // Navigation removes the state via navigateAway() before calling closeHandledScreen().
@@ -235,7 +339,44 @@ public class BarrelGuiHandler {
             inv.setStack(btn.slot(), buildStack(player, def, page, btn));
         }
 
+        // Apply background filler for empty slots
+        if (def.getFiller().isPresent()) {
+            GuiDefinition.FillerConfig fill = def.getFiller().get();
+            ItemStack fillStack = buildFillerStack(fill);
+            for (int slot = 0; slot < size; slot++) {
+                if (inv.getStack(slot).isEmpty()) {
+                    inv.setStack(slot, fillStack.copy());
+                }
+            }
+        }
+
         return inv;
+    }
+
+    private static ItemStack buildFillerStack(GuiDefinition.FillerConfig fill) {
+        Identifier id = Identifier.tryParse(fill.item());
+        Item item = Items.STONE;
+        if (id != null && Registries.ITEM.containsId(id)) {
+            item = Registries.ITEM.get(id);
+        }
+        ItemStack stack = new ItemStack(item);
+        if (!fill.name().isEmpty()) {
+            stack.set(DataComponentTypes.CUSTOM_NAME,
+                    Text.literal(fill.name()).styled(s -> s.withItalic(false)));
+        }
+        if (fill.glint()) {
+            stack.set(DataComponentTypes.ENCHANTMENT_GLINT_OVERRIDE, true);
+        }
+        stack.set(DataComponentTypes.CUSTOM_DATA, NbtComponent.of(new NbtCompound()));
+        if (fill.hideTooltip()) {
+            net.minecraft.component.type.TooltipDisplayComponent tooltipDisplay =
+                    net.minecraft.component.type.TooltipDisplayComponent.DEFAULT
+                            .with(DataComponentTypes.CUSTOM_NAME, true)
+                            .with(DataComponentTypes.ITEM_NAME, true)
+                            .with(DataComponentTypes.LORE, true);
+            stack.set(DataComponentTypes.TOOLTIP_DISPLAY, tooltipDisplay);
+        }
+        return stack;
     }
 
     private static ItemStack buildStack(ServerPlayerEntity player,
@@ -451,6 +592,12 @@ public class BarrelGuiHandler {
                 int amount = parts.length > 1 ? parseIntSafe(parts[1]) : 1;
                 yield !hasItemCount(player, itemId, amount);
             }
+            case LEVEL_GT -> player.experienceLevel > parseIntSafe(cond.value());
+            case LEVEL_LT -> player.experienceLevel < parseIntSafe(cond.value());
+            case HEALTH_GT -> player.getHealth() > parseFloatSafe(cond.value());
+            case HEALTH_LT -> player.getHealth() < parseFloatSafe(cond.value());
+            case FOOD_GT -> player.getHungerManager().getFoodLevel() > parseIntSafe(cond.value());
+            case FOOD_LT -> player.getHungerManager().getFoodLevel() < parseIntSafe(cond.value());
         };
     }
 
@@ -495,6 +642,10 @@ public class BarrelGuiHandler {
 
     private static int parseIntSafe(String s) {
         try { return Integer.parseInt(s); } catch (NumberFormatException e) { return 0; }
+    }
+
+    private static float parseFloatSafe(String s) {
+        try { return Float.parseFloat(s); } catch (NumberFormatException e) { return 0.0f; }
     }
 
     // ── Toggle action resolution ─────────────────────────────────────────────
@@ -578,9 +729,9 @@ public class BarrelGuiHandler {
                 return true;
             }
             case SOUND -> {
-                // value format: "minecraft:sound.id"  (volume=1.0, pitch=1.0)
-                //           or: "minecraft:sound.id:volume:pitch"
-                String[] parts = action.value().split(":");
+                // Resolve placeholders in sound value too!
+                String resolvedSound = resolve(action.value(), player, def, currentPage);
+                String[] parts = resolvedSound.split(":");
                 // Reconstruct namespace:path which may itself contain ':'
                 // Format is always <namespace>:<path>[:<volume>[:<pitch>]]
                 // So minimum 2 parts (namespace + path), max 4.
@@ -595,7 +746,7 @@ public class BarrelGuiHandler {
                     soundId = parts[0] + ":" + parts[1];
                     try { volume = Float.parseFloat(parts[2]); } catch (NumberFormatException ignored) {}
                 } else {
-                    soundId = action.value();
+                    soundId = resolvedSound;
                 }
                 Identifier soundIdent = Identifier.tryParse(soundId);
                 if (soundIdent != null) {
@@ -692,6 +843,39 @@ public class BarrelGuiHandler {
             case ACTION_BAR -> {
                 String resolved = resolve(action.value(), player, def, currentPage);
                 player.sendMessage(Text.literal(resolved), true);
+            }
+            case ADD_EFFECT -> {
+                String resolved = resolve(action.value(), player, def, currentPage);
+                String[] parts = resolved.split(":");
+                if (parts.length >= 2) {
+                    try {
+                        String effectId = parts[0];
+                        int durationSecs = Integer.parseInt(parts[1]);
+                        int amp = parts.length > 2 ? Integer.parseInt(parts[2]) : 0;
+                        boolean particles = parts.length <= 3 || Boolean.parseBoolean(parts[3]);
+
+                        Identifier effIdent = Identifier.tryParse(effectId);
+                        if (effIdent != null) {
+                            Registries.STATUS_EFFECT.getEntry(effIdent).ifPresent(entry -> {
+                                player.addStatusEffect(new net.minecraft.entity.effect.StatusEffectInstance(
+                                        entry, durationSecs * 20, amp, false, particles, particles
+                                ));
+                            });
+                        }
+                    } catch (NumberFormatException ignored) {}
+                }
+            }
+            case REMOVE_EFFECT -> {
+                String resolved = resolve(action.value(), player, def, currentPage);
+                Identifier effIdent = Identifier.tryParse(resolved);
+                if (effIdent != null) {
+                    Registries.STATUS_EFFECT.getEntry(effIdent).ifPresent(entry -> {
+                        player.removeStatusEffect(entry);
+                    });
+                }
+            }
+            case CLEAR_EFFECTS -> {
+                player.clearStatusEffects();
             }
         }
         return false;

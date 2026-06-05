@@ -1,8 +1,15 @@
 {
   "title": "§6Counter: §f{var:count}  §8— {player}",
   "rows": 1,
+  "filler": {
+    "item": "minecraft:gray_stained_glass_pane",
+    "name": " ",
+    "glint": false,
+    "hide_tooltip": true
+  },
   "on_open": [
-    { "type": "sound", "value": "minecraft:block.note_block.pling:0.8:1.0" }
+    { "type": "sound", "value": "minecraft:block.note_block.pling:0.8:1.0" },
+    { "type": "set_var", "var": "count", "value": "1" }
   ],
   "buttons": [
     {
@@ -13,7 +20,7 @@
       "actions": [
         { "type": "add_var", "var": "count", "value": "1" },
         { "type": "sound", "value": "minecraft:block.note_block.pling:1.0:1.5" },
-        { "type": "open_gui", "value": "example:counter" }
+        { "type": "refresh" }
       ]
     },
     {
@@ -25,13 +32,14 @@
       "actions": [
         { "type": "sub_var", "var": "count", "value": "1" },
         { "type": "sound", "value": "minecraft:block.note_block.bass:1.0:1.0" },
-        { "type": "open_gui", "value": "example:counter" }
+        { "type": "refresh" }
       ]
     },
     {
       "slot": 4,
       "item": "minecraft:paper",
       "name": "§fValue: §e{var:count}",
+      "amount": "{var:count}",
       "lore": [
         "§7Player: §f{player}",
         "§7GUI: §8{gui}"
@@ -46,7 +54,7 @@
       "actions": [
         { "type": "reset_var", "var": "count" },
         { "type": "sound", "value": "minecraft:block.lever.click:1.0:0.8" },
-        { "type": "open_gui", "value": "example:counter" }
+        { "type": "refresh" }
       ]
     },
     {
