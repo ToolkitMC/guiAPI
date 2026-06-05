@@ -574,14 +574,6 @@ public class GuiApiModMenuEntry implements ModMenuApi {
         }
 
         @Override
-        public void tick() {
-            slotField.tick();
-            amountField.tick();
-            itemField.tick();
-            nameField.tick();
-        }
-
-        @Override
         public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
             if (slotField.keyPressed(keyCode, scanCode, modifiers) ||
                     amountField.keyPressed(keyCode, scanCode, modifiers) ||
