@@ -303,7 +303,8 @@ public class GuiApiModMenuEntry implements ModMenuApi {
             // Action Buttons
             // Save & Back
             addDrawableChild(ButtonWidget.builder(Text.literal("Apply & Back"), btn -> {
-                GuiDefinition newDef = new GuiDefinition(
+                // Use factory method to avoid any package constructor access constraints
+                GuiDefinition newDef = GuiDefinition.create(
                         def.getId(),
                         titleField.getText(),
                         rows,
@@ -330,11 +331,6 @@ public class GuiApiModMenuEntry implements ModMenuApi {
             ctx.drawCenteredTextWithShadow(textRenderer,
                     Text.literal("§6GUI Editor §7— " + id.toString()), width / 2, 10, 0xFFFFFF);
             ctx.fill(width / 2 - 150, height - 32, width / 2 + 150, height - 31, 0x44FFFFFF);
-        }
-
-        @Override
-        public void tick() {
-            titleField.tick();
         }
 
         @Override
