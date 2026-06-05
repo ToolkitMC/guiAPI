@@ -134,10 +134,7 @@ public class BarrelGuiHandler {
         });
 
         // Fire on_open actions — stop if a navigation/close action fires
-        for (GuiDefinition.ButtonAction action : def.getOnOpen()) {
-            boolean stop = executeAction(player, def, page, action);
-            if (stop) break;
-        }
+        executeDelayedActionChain(player, def, page, def.getOnOpen(), 0, false);
     }
 
     public static void tick(MinecraftServer server) {
@@ -186,7 +183,7 @@ public class BarrelGuiHandler {
             int remaining = task.ticksRemaining - 1;
             if (remaining <= 0) {
                 // Time to execute the next action!
-                executeDelayedActionChain(player, task.def, task.page, task.actions, task.startIndex);
+                executeDelayedActionChain(player, task.def, task.page, task.actions, task.startIndex, true);
             } else {
                 // Re-queue with decremented tick count
                 PENDING_TASKS.add(new DelayedTask(task.playerUuid, task.actions, task.startIndex, remaining, task.def, task.page));
@@ -269,21 +266,22 @@ public class BarrelGuiHandler {
                 else       player.addCommandTag(tgl.tag());
 
                 // Execute all defined actions using Delayed Action Chain Engine
-                executeDelayedActionChain(player, def, page, toggleActions, 0);
+                executeDelayedActionChain(player, def, page, toggleActions, 0, false);
                 return true;
             }
 
             // Execute standard click action chain using Delayed Action Chain Engine
-            executeDelayedActionChain(player, def, page, actions, 0);
+            executeDelayedActionChain(player, def, page, actions, 0, false);
             return true;
         }
         return true;
     }
 
-    public static void executeDelayedActionChain(ServerPlayerEntity player, GuiDefinition def, int page, List<GuiDefinition.ButtonAction> actions, int startIndex) {
+    public static void executeDelayedActionChain(ServerPlayerEntity player, GuiDefinition def, int page, List<GuiDefinition.ButtonAction> actions, int startIndex, boolean ignoreFirstDelay) {
         for (int i = startIndex; i < actions.size(); i++) {
             GuiDefinition.ButtonAction action = actions.get(i);
-            if (action.delay() > 0 && dev.toolkitmc.guiapi.config.GuiApiConfig.INSTANCE.isAllowDelayedActions()) {
+            boolean checkDelay = (i > startIndex) || !ignoreFirstDelay;
+            if (checkDelay && action.delay() > 0 && dev.toolkitmc.guiapi.config.GuiApiConfig.INSTANCE.isAllowDelayedActions()) {
                 // Schedule remaining actions starting from this delayed one!
                 PENDING_TASKS.add(new DelayedTask(player.getUuid(), actions, i, action.delay(), def, page));
                 break;
