@@ -205,7 +205,7 @@ public class GuiDefinition {
 
     // ── Constructor ──────────────────────────────────────────────────────────
 
-    private GuiDefinition(Identifier id, String title, int rows,
+    public GuiDefinition(Identifier id, String title, int rows,
                           List<Button> buttons,
                           List<ButtonAction> onOpen,
                           List<ButtonAction> onClose,
@@ -222,6 +222,16 @@ public class GuiDefinition {
         this.filler    = filler;
         this.tickRate  = tickRate;
         this.closeOnMove = closeOnMove;
+    }
+
+    public static GuiDefinition create(Identifier id, String title, int rows,
+                                       List<Button> buttons,
+                                       List<ButtonAction> onOpen,
+                                       List<ButtonAction> onClose,
+                                       Optional<FillerConfig> filler,
+                                       int tickRate,
+                                       boolean closeOnMove) {
+        return new GuiDefinition(id, title, rows, buttons, onOpen, onClose, filler, tickRate, closeOnMove);
     }
 
     // ── Parser ───────────────────────────────────────────────────────────────
