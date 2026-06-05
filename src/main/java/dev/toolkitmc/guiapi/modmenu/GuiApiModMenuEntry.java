@@ -442,7 +442,7 @@ public class GuiApiModMenuEntry implements ModMenuApi {
                     // 1. Update in-memory
                     dev.toolkitmc.guiapi.loader.GuiRegistry.INSTANCE.put(id, newDef);
                     // 2. Save directly to the datapack JSON file on disk
-                    dev.toolkitmc.guiapi.loader.GuiRegistry.saveToDisk(server, id, newDef);
+                    dev.toolkitmc.guiapi.loader.GuiRegistry.INSTANCE.saveToDisk(server, id, newDef);
 
                     // 3. Reload datapacks so everything syncs perfectly
                     if (MinecraftClient.getInstance().player != null) {
