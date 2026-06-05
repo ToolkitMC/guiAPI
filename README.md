@@ -7,7 +7,7 @@ No client mod required. No macros. No external dependencies beyond Fabric API.
 
 ## Installation
 
-1. Drop `guiapi-1.0.4.jar` into your `mods/` folder.
+1. Drop `guiapi-1.0.3.jar` into your `mods/` folder.
 2. Drop your datapack into `world/datapacks/`.
 3. Run `/reload` or `/guiapi reload`.
 
@@ -74,6 +74,9 @@ The GUI ID used in commands is `<namespace>:<name>` — matching the file path u
 | `name` | string | `""` | Display name. Supports color codes and placeholders. |
 | `lore` | string[] | `[]` | Lore lines. Supports placeholders. |
 | `glint` | boolean | `false` | Apply enchantment glint effect. |
+| `amount` | string | `"1"` | Item stack count. Supports color codes and placeholders (e.g., `{var:counter}`). |
+| `hide_tooltip` | boolean | `false` | Hides the item's name and lore entirely from tooltip. |
+| `hide_additional_tooltip` | boolean | `false` | Hides armor armor-modifiers, sword damage stats, dye colors, etc. |
 | `custom_model_data` | int or object | — | Sets custom model data component (supports legacy int and 1.21.4+ composite object formats). |
 | `item_model` | string | — | Sets the custom item model component ID (1.21.2+). |
 | `click_type` | string | `"any"` | Which click triggers actions: `any` · `left` · `right` · `shift` |
@@ -125,6 +128,10 @@ Supported in `title`, button `name`, `lore`, `message` values, and `run_command`
 | `goto_page` | Page index (string) | — | Jump to a specific page. |
 | `refresh` | — | — | Refresh the current GUI inventory dynamically (no closing/flicker). |
 | `take_item` | `itemId:amount` | — | Deducts a specified amount of an item from the player's inventory. |
+| `set_score` | `objective:value` | — | Sets a player scoreboard objective directly (supports placeholders). |
+| `add_score` | `objective:value` | — | Adds a value to a player scoreboard objective directly (supports placeholders). |
+| `sub_score` | `objective:value` | — | Subtracts a value from a player scoreboard objective directly (supports placeholders). |
+| `action_bar` | Text string | — | Sends an action bar message directly to the player. Supports placeholders. |
 
 Multiple actions are executed in order. `close`, `open_gui`, `next_page`, `prev_page`, and `goto_page` stop the chain after executing.
 
@@ -336,7 +343,7 @@ Variables are per-player, in-memory, and cleared when the GUI closes.
 
 ```bash
 ./gradlew build
-# Output: build/libs/guiapi-1.0.4.jar
+# Output: build/libs/guiapi-1.0.3.jar
 ```
 
 Requires **Java 21**.

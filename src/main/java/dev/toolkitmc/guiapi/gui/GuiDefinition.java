@@ -35,7 +35,8 @@ public class GuiDefinition {
 
     public enum ActionType {
         RUN_COMMAND, CLOSE, OPEN_GUI, MESSAGE, NEXT_PAGE, PREV_PAGE, GOTO_PAGE, SOUND,
-        SET_VAR, ADD_VAR, SUB_VAR, RESET_VAR, CLEAR_VARS, REFRESH, TAKE_ITEM;
+        SET_VAR, ADD_VAR, SUB_VAR, RESET_VAR, CLEAR_VARS, REFRESH, TAKE_ITEM,
+        SET_SCORE, ADD_SCORE, SUB_SCORE, ACTION_BAR;
 
         public static ActionType fromString(String s) {
             return switch (s.toLowerCase()) {
@@ -54,6 +55,10 @@ public class GuiDefinition {
                 case "clear_vars"  -> CLEAR_VARS;
                 case "refresh"     -> REFRESH;
                 case "take_item"   -> TAKE_ITEM;
+                case "set_score"   -> SET_SCORE;
+                case "add_score"   -> ADD_SCORE;
+                case "sub_score"   -> SUB_SCORE;
+                case "action_bar"  -> ACTION_BAR;
                 default            -> CLOSE;
             };
         }
@@ -132,7 +137,13 @@ public class GuiDefinition {
             Optional<CustomModelDataConfig> customModelDataOn,
             Optional<CustomModelDataConfig> customModelDataOff,
             Optional<String> itemModelOn,
-            Optional<String> itemModelOff
+            Optional<String> itemModelOff,
+            String amountOn,
+            String amountOff,
+            boolean hideTooltipOn,
+            boolean hideTooltipOff,
+            boolean hideAdditionalTooltipOn,
+            boolean hideAdditionalTooltipOff
     ) {}
 
     /**
@@ -151,7 +162,10 @@ public class GuiDefinition {
             List<ButtonAction> actions,
             Optional<ToggleDefinition> toggle,
             Optional<CustomModelDataConfig> customModelData,
-            Optional<String> itemModel
+            Optional<String> itemModel,
+            String amount,
+            boolean hideTooltip,
+            boolean hideAdditionalTooltip
     ) {}
 
     // ── Fields ───────────────────────────────────────────────────────────────
@@ -228,7 +242,8 @@ public class GuiDefinition {
         if (b.has("toggle") && b.get("toggle").isJsonObject()) {
             ToggleDefinition toggle = parseToggle(b.getAsJsonObject("toggle"));
             return new Button(slot, page, "", "", List.of(), false,
-                    clickType, condition, List.of(), Optional.of(toggle), Optional.empty(), Optional.empty());
+                    clickType, condition, List.of(), Optional.of(toggle), Optional.empty(), Optional.empty(),
+                    "1", false, false);
         }
 
         // Standard button
@@ -256,7 +271,12 @@ public class GuiDefinition {
                 ? Optional.of(b.get("item_model").getAsString())
                 : Optional.empty();
 
-        return new Button(slot, page, item, name, lore, glint, clickType, condition, actions, Optional.empty(), customModelData, itemModel);
+        String amount = b.has("amount") ? b.get("amount").getAsString() : "1";
+        boolean hideTooltip = b.has("hide_tooltip") && b.get("hide_tooltip").getAsBoolean();
+        boolean hideAdditionalTooltip = b.has("hide_additional_tooltip") && b.get("hide_additional_tooltip").getAsBoolean();
+
+        return new Button(slot, page, item, name, lore, glint, clickType, condition, actions, Optional.empty(),
+                customModelData, itemModel, amount, hideTooltip, hideAdditionalTooltip);
     }
 
     private static Optional<CustomModelDataConfig> parseCustomModelData(JsonObject obj, String key) {
@@ -335,9 +355,19 @@ public class GuiDefinition {
         Optional<String> itemModelOn  = t.has("item_model_on")  ? Optional.of(t.get("item_model_on").getAsString())  : Optional.empty();
         Optional<String> itemModelOff = t.has("item_model_off") ? Optional.of(t.get("item_model_off").getAsString()) : Optional.empty();
 
+        String amountOn  = t.has("amount_on")  ? t.get("amount_on").getAsString()  : "1";
+        String amountOff = t.has("amount_off") ? t.get("amount_off").getAsString() : "1";
+
+        boolean hideTooltipOn  = t.has("hide_tooltip_on")  && t.get("hide_tooltip_on").getAsBoolean();
+        boolean hideTooltipOff = t.has("hide_tooltip_off") && t.get("hide_tooltip_off").getAsBoolean();
+
+        boolean hideAdditionalTooltipOn  = t.has("hide_additional_tooltip_on")  && t.get("hide_additional_tooltip_on").getAsBoolean();
+        boolean hideAdditionalTooltipOff = t.has("hide_additional_tooltip_off") && t.get("hide_additional_tooltip_off").getAsBoolean();
+
         return new ToggleDefinition(tag, itemOn, itemOff, nameOn, nameOff,
                 loreOn, loreOff, glintOn, glintOff, actionsOn, actionsOff,
-                customModelDataOn, customModelDataOff, itemModelOn, itemModelOff);
+                customModelDataOn, customModelDataOff, itemModelOn, itemModelOff,
+                amountOn, amountOff, hideTooltipOn, hideTooltipOff, hideAdditionalTooltipOn, hideAdditionalTooltipOff);
     }
 
     private static List<String> parseStringList(JsonObject obj, String key) {

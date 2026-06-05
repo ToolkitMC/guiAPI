@@ -45,6 +45,9 @@ import java.util.Optional;
  *  - Dynamic refresh support (refresh action & flicker-free toggle)
  *  - take_item action support
  *  - item_model and 1.21.4+ custom_model_data support
+ *  - Dynamic stack amount (amount field with placeholders)
+ *  - Scoreboard manipulation (set_score, add_score, sub_score) & action_bar actions
+ *  - Tooltip Controls (hide_tooltip and hide_additional_tooltip)
  */
 public class BarrelGuiHandler {
 
@@ -53,6 +56,8 @@ public class BarrelGuiHandler {
             new java.util.concurrent.ConcurrentHashMap<>();
 
     private record OpenState(GuiDefinition def, int page) {}
+
+    private enum ScoreModType { SET, ADD, SUB }
 
     private BarrelGuiHandler() {}
 
@@ -243,6 +248,9 @@ public class BarrelGuiHandler {
         final boolean glint;
         final Optional<GuiDefinition.CustomModelDataConfig> customModelData;
         final Optional<String> itemModel;
+        final String amountStr;
+        final boolean hideTooltip;
+        final boolean hideAdditionalTooltip;
 
         if (btn.toggle().isPresent()) {
             GuiDefinition.ToggleDefinition tgl = btn.toggle().get();
@@ -253,6 +261,9 @@ public class BarrelGuiHandler {
             glint  = on ? tgl.glintOn() : tgl.glintOff();
             customModelData = on ? tgl.customModelDataOn() : tgl.customModelDataOff();
             itemModel = on ? tgl.itemModelOn() : tgl.itemModelOff();
+            amountStr = on ? tgl.amountOn() : tgl.amountOff();
+            hideTooltip = on ? tgl.hideTooltipOn() : tgl.hideTooltipOff();
+            hideAdditionalTooltip = on ? tgl.hideAdditionalTooltipOn() : tgl.hideAdditionalTooltipOff();
         } else {
             itemId = btn.item();
             name   = btn.name();
@@ -260,6 +271,9 @@ public class BarrelGuiHandler {
             glint  = btn.glint();
             customModelData = btn.customModelData();
             itemModel = btn.itemModel();
+            amountStr = btn.amount();
+            hideTooltip = btn.hideTooltip();
+            hideAdditionalTooltip = btn.hideAdditionalTooltip();
         }
 
         Identifier id = Identifier.tryParse(itemId);
@@ -272,7 +286,14 @@ public class BarrelGuiHandler {
             item = Items.STONE;
         }
 
-        ItemStack stack = new ItemStack(item);
+        // Parse and resolve dynamic stack amount
+        String resolvedAmount = resolve(amountStr, player, def, page);
+        int amount = 1;
+        try {
+            amount = Math.clamp(Integer.parseInt(resolvedAmount), 1, 99);
+        } catch (NumberFormatException ignored) {}
+
+        ItemStack stack = new ItemStack(item, amount);
 
         String resolvedName = resolve(name, player, def, page);
         if (!resolvedName.isEmpty()) {
@@ -309,6 +330,15 @@ public class BarrelGuiHandler {
             if (modelId != null) {
                 stack.set(DataComponentTypes.ITEM_MODEL, modelId);
             }
+        }
+
+        // --- Tooltip Control ---
+        if (hideTooltip) {
+            stack.set(DataComponentTypes.HIDE_TOOLTIP, net.minecraft.util.Unit.INSTANCE);
+        }
+
+        if (hideAdditionalTooltip) {
+            stack.set(DataComponentTypes.HIDE_ADDITIONAL_TOOLTIP, net.minecraft.util.Unit.INSTANCE);
         }
 
         return stack;
@@ -606,6 +636,43 @@ public class BarrelGuiHandler {
                 String itemId = parts[0];
                 int amount = parts.length > 1 ? parseIntSafe(parts[1]) : 1;
                 takeItemCount(player, itemId, amount);
+            }
+            case SET_SCORE -> {
+                String resolved = resolve(action.value(), player, def, currentPage);
+                String[] parts = resolved.split(":", 2);
+                if (parts.length == 2) {
+                    try {
+                        String objName = parts[0];
+                        int val = Integer.parseInt(parts[1]);
+                        modifyScore(player, objName, val, ScoreModType.SET);
+                    } catch (NumberFormatException ignored) {}
+                }
+            }
+            case ADD_SCORE -> {
+                String resolved = resolve(action.value(), player, def, currentPage);
+                String[] parts = resolved.split(":", 2);
+                if (parts.length == 2) {
+                    try {
+                        String objName = parts[0];
+                        int val = Integer.parseInt(parts[1]);
+                        modifyScore(player, objName, val, ScoreModType.ADD);
+                    } catch (NumberFormatException ignored) {}
+                }
+            }
+            case SUB_SCORE -> {
+                String resolved = resolve(action.value(), player, def, currentPage);
+                String[] parts = resolved.split(":", 2);
+                if (parts.length == 2) {
+                    try {
+                        String objName = parts[0];
+                        int val = Integer.parseInt(parts[1]);
+                        modifyScore(player, objName, val, ScoreModType.SUB);
+                    } catch (NumberFormatException ignored) {}
+                }
+            }
+            case ACTION_BAR -> {
+                String resolved = resolve(action.value(), player, def, currentPage);
+                player.sendMessage(Text.literal(resolved), true);
             }
         }
         return false;
