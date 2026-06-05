@@ -29,16 +29,17 @@
     {
       "slot": 10,
       "item": "minecraft:lime_concrete",
-      "name": "§a1. Dinamik Miktar & Gecikmeli Aksiyonlar",
+      "name": "§a1. Dynamic Stack Size & Action Delays",
       "amount": "{var:counter}",
       "lore": [
-        "§7Sayaç değerine göre eşyanın miktarı dinamik olarak güncellenir!",
-        "§7Sonraki miktar: §f{var:counter}",
-        "§7Tıkladığında 1 artar, 20 tick (1sn) bekler, sonra ses çalar!"
+        "§7Updates slot item count based on a variable,",
+        "§7completely flicker-free!",
+        "§7Next count: §f{var:counter}",
+        "§7Increments by 1, waits 20 ticks (1s), then plays sound!"
       ],
       "actions": [
         { "type": "add_var", "var": "counter", "value": "1" },
-        { "type": "action_bar", "value": "§aSayaç güncellendi: {var:counter}! Ses 1 saniye sonra çalacak..." },
+        { "type": "action_bar", "value": "§aCounter updated to {var:counter}! Sound playing in 1s..." },
         { "type": "refresh" },
         { "type": "sound", "value": "minecraft:entity.experience_orb.pickup:0.5:1.2", "delay": 20 }
       ]
@@ -46,32 +47,33 @@
     {
       "slot": 12,
       "item": "minecraft:diamond_sword",
-      "name": "§b2. Eşya Marketi §a(Demir Al)",
+      "name": "§b2. Item Shop §a(Buy Iron)",
       "lore": [
-        "§7Maliyet: §e5 Altın Parçası",
-        "§7Satın almak için envanterinizde altın olmalıdır."
+        "§7Cost: §e5 Gold Nuggets",
+        "§7Requires gold in inventory.",
+        "§aClick to purchase!"
       ],
       "condition": { "type": "has_item", "value": "minecraft:gold_nugget:5" },
       "actions": [
         { "type": "take_item", "value": "minecraft:gold_nugget:5" },
         { "type": "run_command", "value": "give @s minecraft:iron_ingot", "run_with": "console" },
         { "type": "sound", "value": "minecraft:entity.villager.yes" },
-        { "type": "action_bar", "value": "§aSatın alım başarılı!" },
+        { "type": "action_bar", "value": "§aPurchase successful!" },
         { "type": "refresh" }
       ]
     },
     {
       "slot": 12,
       "item": "minecraft:barrier",
-      "name": "§c2. Eşya Marketi §7(Kilitli)",
+      "name": "§c2. Item Shop §7(Locked)",
       "lore": [
-        "§7Maliyet: §e5 Altın Parçası",
-        "§cEnvanterinizde yeterli Altın Parçası yok!"
+        "§7Cost: §e5 Gold Nuggets",
+        "§cYou do not have enough Gold Nuggets!"
       ],
       "condition": { "type": "not_item", "value": "minecraft:gold_nugget:5" },
       "actions": [
         { "type": "sound", "value": "minecraft:entity.villager.no" },
-        { "type": "action_bar", "value": "§cYetersiz bakiye!" }
+        { "type": "action_bar", "value": "§cInsufficient funds!" }
       ]
     },
     {
@@ -79,15 +81,15 @@
       "item": "minecraft:gold_block",
       "name": "§e5. Scoreboard & ActionBar Desteği",
       "lore": [
-        "§7Doğrudan scoreboard skorunuzu değiştirir!",
-        "§7Sol Tık: §a+10 Coin",
-        "§7Sağ Tık: §c-10 Coin",
-        "§7Mevcut Coin: §e{score:coins}"
+        "§7Directly modifies your scoreboard!",
+        "§7Left-Click: §a+10 Coins",
+        "§7Right-Click: §c-10 Coins",
+        "§7Current Coins: §e{score:coins}"
       ],
       "actions": [
         { "type": "add_score", "value": "coins:10" },
         { "type": "sound", "value": "minecraft:entity.experience_orb.pickup" },
-        { "type": "action_bar", "value": "§aHesabınıza +10 Coin eklendi!" },
+        { "type": "action_bar", "value": "§a+10 Coins added!" },
         { "type": "refresh" }
       ],
       "click_type": "left"
@@ -97,15 +99,15 @@
       "item": "minecraft:gold_block",
       "name": "§e5. Scoreboard & ActionBar Desteği",
       "lore": [
-        "§7Doğrudan scoreboard skorunuzu değiştirir!",
-        "§7Sol Tık: §a+10 Coin",
-        "§7Sağ Tık: §c-10 Coin",
-        "§7Mevcut Coin: §e{score:coins}"
+        "§7Directly modifies your scoreboard!",
+        "§7Left-Click: §a+10 Coins",
+        "§7Right-Click: §c-10 Coins",
+        "§7Current Coins: §e{score:coins}"
       ],
       "actions": [
         { "type": "sub_score", "value": "coins:10" },
         { "type": "sound", "value": "minecraft:block.anvil.land:0.2:1.5" },
-        { "type": "action_bar", "value": "§cHesabınızdan -10 Coin eksildi!" },
+        { "type": "action_bar", "value": "§c-10 Coins removed!" },
         { "type": "refresh" }
       ],
       "click_type": "right"
@@ -113,74 +115,75 @@
     {
       "slot": 16,
       "item": "minecraft:netherite_sword",
-      "name": "§c6. Sadeleştirilmiş Nitelikler",
+      "name": "§c6. Hiding Additional Tooltips",
       "lore": [
-        "§7Kılıcın altındaki hasar değerleri vb. tooltip kalabalığı temizlendi!"
+        "§7Cleans up sword damage modifiers",
+        "§7using hide_additional_tooltip: true!"
       ],
       "hide_additional_tooltip": true
     },
     {
       "slot": 20,
       "item": "minecraft:brewing_stand",
-      "name": "§d8. İksir Efekt Yönetimi",
+      "name": "§d8. Status Effect Controller",
       "lore": [
-        "§7Sol Tık: §bHız Efekti Al (15 sn)",
-        "§7Sağ Tık: §cEfektleri Temizle (Süt İç)"
+        "§7Left-Click: §bReceive Speed II (15s)",
+        "§7Right-Click: §cCure Effects (Drink Milk)"
       ],
       "actions": [
         { "type": "add_effect", "value": "minecraft:speed:15:1:false" },
         { "type": "sound", "value": "minecraft:entity.generic.drink" },
-        { "type": "action_bar", "value": "§bHız II Efekti Verildi!" }
+        { "type": "action_bar", "value": "§bSpeed II Effect granted!" }
       ],
       "click_type": "left"
     },
     {
       "slot": 20,
       "item": "minecraft:brewing_stand",
-      "name": "§d8. İksir Efekt Yönetimi",
+      "name": "§d8. Status Effect Controller",
       "lore": [
-        "§7Sol Tık: §bHız Efekti Al (15 sn)",
-        "§7Sağ Tık: §cEfektleri Temizle (Süt İç)"
+        "§7Left-Click: §bReceive Speed II (15s)",
+        "§7Right-Click: §cCure Effects (Drink Milk)"
       ],
       "actions": [
         { "type": "clear_effects" },
         { "type": "sound", "value": "minecraft:entity.cow.milk" },
-        { "type": "action_bar", "value": "§cTüm efektler temizlendi!" }
+        { "type": "action_bar", "value": "§cAll effects cleared!" }
       ],
       "click_type": "right"
     },
     {
       "slot": 22,
       "item": "minecraft:experience_bottle",
-      "name": "§a7. Seviye Kontrolü §7(Level >= 30)",
+      "name": "§a7. Experience Check §7(Level >= 30)",
       "lore": [
-        "§7Yalnızca 30 veya üzeri XP Seviyesine",
-        "§7sahip oyuncular bu butona tıklayabilir!"
+        "§7Only players with XP Level >= 30",
+        "§7can click this button!"
       ],
       "condition": { "type": "level_gt", "value": "29" },
       "actions": [
         { "type": "sound", "value": "minecraft:entity.player.levelup" },
-        { "type": "action_bar", "value": "§aTebrikler! Seviyeniz yeterli." }
+        { "type": "action_bar", "value": "§aCongratulations! Level check passed." }
       ]
     },
     {
       "slot": 22,
       "item": "minecraft:glass_bottle",
-      "name": "§c7. Seviye Kontrolü §7(Kilitli)",
+      "name": "§c7. Experience Check §7(Locked)",
       "lore": [
-        "§cSeviyeniz 30'dan düşük!",
-        "§7Bu özellik kilitli."
+        "§cYour level is below 30!",
+        "§7This feature is locked."
       ],
       "condition": { "type": "level_lt", "value": "30" },
       "actions": [
         { "type": "sound", "value": "minecraft:entity.enderman.teleport:0.5:0.5" },
-        { "type": "action_bar", "value": "§cEn az 30 seviye olmalısınız!" }
+        { "type": "action_bar", "value": "§cYou must be at least level 30!" }
       ]
     },
     {
       "slot": 24,
       "item": "minecraft:book",
-      "name": "§b3. Çoklu Custom Model Data",
+      "name": "§b3. Multi-Value Custom Model Data",
       "lore": [
         "§7Gelişmiş 1.21.4+ floats/flags/strings/colors"
       ],
@@ -194,16 +197,17 @@
     {
       "slot": 26,
       "item": "minecraft:stick",
-      "name": "§bStick. Özel Eşya Modeli",
+      "name": "§b3. Custom Item Model",
       "lore": [
-        "§7item_model componentini stick üzerine uygular."
+        "§7Applies custom item_model ID",
+        "§7directly to the stick item."
       ],
       "item_model": "my_pack:item/custom_sword"
     },
     {
       "slot": 31,
       "item": "minecraft:barrier",
-      "name": "§cKapat",
+      "name": "§cClose",
       "actions": [
         { "type": "sound", "value": "minecraft:ui.button.click" },
         { "type": "close" }

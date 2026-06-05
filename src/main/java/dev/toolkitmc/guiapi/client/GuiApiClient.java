@@ -36,7 +36,7 @@ public class GuiApiClient implements ClientModInitializer {
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             while (openMenuKey.wasPressed()) {
                 if (client.player != null) {
-                    client.player.networkHandler.sendCommand("guiapi open example:welcome");
+                    client.player.networkHandler.sendChatCommand("guiapi open example:welcome");
                 }
             }
         });
@@ -66,19 +66,21 @@ public class GuiApiClient implements ClientModInitializer {
                                 isSearchActive = false;
                                 searchQuery = "";
                                 return true;
+                            } else if (key == 32) { // GLFW_KEY_SPACE = 32
+                                searchQuery += " ";
+                                return false;
+                            } else if (key >= 65 && key <= 90) { // GLFW_KEY_A to GLFW_KEY_Z (65 to 90)
+                                char c = (char) key;
+                                if ((modifiers & 1) == 0) { // GLFW_MOD_SHIFT = 1
+                                    c = Character.toLowerCase(c);
+                                }
+                                searchQuery += c;
+                                return false;
+                            } else if (key >= 48 && key <= 57) { // GLFW_KEY_0 to GLFW_KEY_9 (48 to 57)
+                                char c = (char) (key - 48 + '0');
+                                searchQuery += c;
+                                return false;
                             }
-                        }
-                        return true;
-                    });
-
-                    // Register character typed listener for search box input
-                    ScreenKeyboardEvents.allowCharTyped(screen).register((screen1, chr, modifiers) -> {
-                        if (isSearchActive) {
-                            // Only append printable ASCII characters
-                            if (chr >= 32 && chr <= 126) {
-                                searchQuery += chr;
-                            }
-                            return false; // consume key
                         }
                         return true;
                     });
