@@ -11,6 +11,7 @@ import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.widget.ButtonWidget;
 import net.minecraft.client.gui.widget.TextWidget;
 import net.minecraft.client.gui.widget.TextFieldWidget;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.text.Text;
 
 import java.util.ArrayList;
@@ -26,6 +27,44 @@ public class GuiApiModMenuEntry implements ModMenuApi {
     @Override
     public ConfigScreenFactory<?> getModConfigScreenFactory() {
         return GuiApiConfigScreen::new;
+    }
+
+    // ── Helper methods for Actions string parsing & serialization ────────────
+
+    private static GuiDefinition.ButtonAction parseActionFromString(String str) {
+        String[] parts = str.trim().split(":", 3);
+        if (parts.length >= 2) {
+            GuiDefinition.ActionType type = GuiDefinition.ActionType.fromString(parts[0]);
+            String val = parts[1];
+            String var = "";
+            if (type == GuiDefinition.ActionType.SET_VAR ||
+                type == GuiDefinition.ActionType.ADD_VAR ||
+                type == GuiDefinition.ActionType.SUB_VAR ||
+                type == GuiDefinition.ActionType.RESET_VAR) {
+                var = parts[1];
+                val = parts.length > 2 ? parts[2] : "";
+            } else if (parts.length > 2) {
+                // Reconstruct value that contains colons
+                val = parts[1] + ":" + parts[2];
+            }
+            return new GuiDefinition.ButtonAction(type, val, GuiDefinition.RunWith.PLAYER, var, 0);
+        }
+        return new GuiDefinition.ButtonAction(GuiDefinition.ActionType.CLOSE, "");
+    }
+
+    private static String serializeActionsToString(List<GuiDefinition.ButtonAction> actions) {
+        List<String> list = new ArrayList<>();
+        for (GuiDefinition.ButtonAction act : actions) {
+            String prefix = act.type().name().toLowerCase();
+            if (act.type() == GuiDefinition.ActionType.SET_VAR ||
+                act.type() == GuiDefinition.ActionType.ADD_VAR ||
+                act.type() == GuiDefinition.ActionType.SUB_VAR) {
+                list.add(prefix + ":" + act.var() + ":" + act.value());
+            } else {
+                list.add(prefix + ":" + act.value());
+            }
+        }
+        return String.join(";", list);
     }
 
     // ── Config screen ────────────────────────────────────────────────────────
@@ -323,9 +362,8 @@ public class GuiApiModMenuEntry implements ModMenuApi {
             y += 28;
 
             // Action Buttons
-            // Save & Back
+            // Save & Back — Open loading screen to search datapack and write JSON directly
             addDrawableChild(ButtonWidget.builder(Text.literal("Apply & Back"), btn -> {
-                // Use factory method to avoid any package constructor access constraints
                 GuiDefinition newDef = GuiDefinition.create(
                         def.getId(),
                         titleField.getText(),
@@ -337,8 +375,7 @@ public class GuiApiModMenuEntry implements ModMenuApi {
                         tickRate,
                         closeOnMove
                 );
-                dev.toolkitmc.guiapi.loader.GuiRegistry.INSTANCE.put(id, newDef);
-                MinecraftClient.getInstance().setScreen(parent);
+                MinecraftClient.getInstance().setScreen(new GuiSaveLoadingScreen(parent, id, newDef));
             }).dimensions(cx - 105, height - 25, 100, 20).build());
 
             // Cancel
@@ -373,6 +410,78 @@ public class GuiApiModMenuEntry implements ModMenuApi {
 
         private static Text toggleText(boolean on) {
             return on ? Text.literal("§aON") : Text.literal("§cOFF");
+        }
+    }
+
+    // ── GUI Save Loading Screen (Client Feature: Persists Datapack on Disk) ──
+
+    static class GuiSaveLoadingScreen extends Screen {
+        private final Screen parent;
+        private final net.minecraft.util.Identifier id;
+        private final GuiDefinition newDef;
+        private int ticksElapsed = 0;
+
+        GuiSaveLoadingScreen(Screen parent, net.minecraft.util.Identifier id, GuiDefinition newDef) {
+            super(Text.literal("Saving GUI..."));
+            this.parent = parent;
+            this.id = id;
+            this.newDef = newDef;
+        }
+
+        @Override
+        protected void init() {
+            ticksElapsed = 0;
+        }
+
+        @Override
+        public void tick() {
+            ticksElapsed++;
+            if (ticksElapsed == 40) { // After 2 seconds, write to disk and trigger reload
+                MinecraftServer server = MinecraftClient.getInstance().getServer();
+                if (server != null) {
+                    // 1. Update in-memory
+                    dev.toolkitmc.guiapi.loader.GuiRegistry.INSTANCE.put(id, newDef);
+                    // 2. Save directly to the datapack JSON file on disk
+                    dev.toolkitmc.guiapi.loader.GuiRegistry.saveToDisk(server, id, newDef);
+
+                    // 3. Reload datapacks so everything syncs perfectly
+                    if (MinecraftClient.getInstance().player != null) {
+                        MinecraftClient.getInstance().player.networkHandler.sendChatCommand("guiapi reload");
+                    }
+                }
+            } else if (ticksElapsed >= 55) { // Return to settings screen
+                MinecraftClient.getInstance().setScreen(parent);
+            }
+        }
+
+        @Override
+        public void render(DrawContext ctx, int mouseX, int mouseY, float delta) {
+            super.render(ctx, mouseX, mouseY, delta);
+
+            int cx = width / 2;
+            int cy = height / 2;
+
+            long time = System.currentTimeMillis();
+            int rainbowColor = java.awt.Color.HSBtoRGB((time % 1500) / 1500f, 0.8f, 0.8f);
+
+            // Draw a solid professional background
+            ctx.fill(0, 0, width, height, 0xDD050505);
+
+            String status = "Locating Datapack Folder...";
+            if (ticksElapsed >= 20 && ticksElapsed < 40) {
+                status = "Overwriting Datapack JSON File...";
+            } else if (ticksElapsed >= 40) {
+                status = "Reloading GUI API Resources...";
+            }
+
+            ctx.drawCenteredTextWithShadow(textRenderer, Text.literal("§6★ GUI API Datapack Writer ★"), cx, cy - 40, 0xFFFFFF);
+            ctx.drawCenteredTextWithShadow(textRenderer, Text.literal(status), cx, cy - 10, rainbowColor);
+
+            // Draw progress bar
+            int barWidth = 160;
+            int progress = Math.min(barWidth, (ticksElapsed * barWidth) / 55);
+            ctx.fill(cx - barWidth / 2, cy + 15, cx + barWidth / 2, cy + 19, 0x44FFFFFF);
+            ctx.fill(cx - barWidth / 2, cy + 15, cx - barWidth / 2 + progress, cy + 19, rainbowColor);
         }
     }
 
@@ -601,9 +710,8 @@ public class GuiApiModMenuEntry implements ModMenuApi {
         private TextFieldWidget amountField;
         private TextFieldWidget loreField; // Combined Lore input field (separated by ;)
 
-        // Primary click action fields
-        private GuiDefinition.ActionType actionType;
-        private TextFieldWidget actionValueField;
+        // Combined Actions input field (separated by ;)
+        private TextFieldWidget actionsField;
 
         private boolean glint;
         private Optional<GuiDefinition.ToggleDefinition> toggle;
@@ -615,13 +723,6 @@ public class GuiApiModMenuEntry implements ModMenuApi {
             this.btn = btn;
             this.glint = btn.glint();
             this.toggle = btn.toggle();
-
-            // Load primary action from existing action list
-            if (!btn.actions().isEmpty()) {
-                this.actionType = btn.actions().get(0).type();
-            } else {
-                this.actionType = GuiDefinition.ActionType.CLOSE;
-            }
         }
 
         public void updateToggle(Optional<GuiDefinition.ToggleDefinition> newToggle) {
@@ -690,44 +791,14 @@ public class GuiApiModMenuEntry implements ModMenuApi {
             addDrawableChild(loreField);
             y += 24;
 
-            // Action Properties Configuration
-            addDrawableChild(new TextWidget(cx - 150, y, 140, 10, Text.literal("§eAction Type"), textRenderer));
-            addDrawableChild(new TextWidget(cx + 5, y, 145, 10, Text.literal("§eAction Value"), textRenderer));
+            // Multiple Actions Input (joined by ;)
+            addDrawableChild(new TextWidget(cx - 150, y, 300, 10, Text.literal("§eActions (Format: 'type:value' or 'type:varKey:value', separate by ';')"), textRenderer));
             y += 12;
-
-            // Action Type Cycle Button
-            ButtonWidget[] actionTypeBtnRef = new ButtonWidget[1];
-            actionTypeBtnRef[0] = ButtonWidget.builder(Text.literal("§b" + actionType.name()), btn -> {
-                // Cycle through a few very common actions
-                GuiDefinition.ActionType[] commonTypes = {
-                        GuiDefinition.ActionType.CLOSE,
-                        GuiDefinition.ActionType.REFRESH,
-                        GuiDefinition.ActionType.MESSAGE,
-                        GuiDefinition.ActionType.ACTION_BAR,
-                        GuiDefinition.ActionType.SOUND,
-                        GuiDefinition.ActionType.RUN_COMMAND,
-                        GuiDefinition.ActionType.OPEN_GUI,
-                        GuiDefinition.ActionType.TAKE_ITEM
-                };
-                int nextIdx = 0;
-                for (int i = 0; i < commonTypes.length; i++) {
-                    if (commonTypes[i] == actionType) {
-                        nextIdx = (i + 1) % commonTypes.length;
-                        break;
-                    }
-                }
-                actionType = commonTypes[nextIdx];
-                btn.setMessage(Text.literal("§b" + actionType.name()));
-            }).dimensions(cx - 150, y, 145, 18).build();
-            addDrawableChild(actionTypeBtnRef[0]);
-
-            // Action Value Input
-            String actionVal = (!btn.actions().isEmpty()) ? btn.actions().get(0).value() : "";
-            actionValueField = new TextFieldWidget(textRenderer, cx + 5, y, 145, 18, Text.literal("Action Value"));
-            actionValueField.setMaxLength(512);
-            actionValueField.setText(actionVal);
-            addDrawableChild(actionValueField);
-            y += 24;
+            actionsField = new TextFieldWidget(textRenderer, cx - 150, y, 300, 18, Text.literal("Actions"));
+            actionsField.setMaxLength(512);
+            actionsField.setText(serializeActionsToString(btn.actions()));
+            addDrawableChild(actionsField);
+            y += 32;
 
             // Actions
             // Save/Apply
@@ -737,7 +808,7 @@ public class GuiApiModMenuEntry implements ModMenuApi {
                     slotVal = Math.max(0, Integer.parseInt(slotField.getText()));
                 } catch (NumberFormatException ignored) {}
 
-                // Build Lore list by splitting by ;
+                // Build Lore list
                 List<String> finalLore = new ArrayList<>();
                 String loreTxt = loreField.getText();
                 if (!loreTxt.isEmpty()) {
@@ -746,12 +817,16 @@ public class GuiApiModMenuEntry implements ModMenuApi {
                     }
                 }
 
-                // Construct primary action from input
+                // Build Actions list from semicolon-separated string
                 List<GuiDefinition.ButtonAction> finalActions = new ArrayList<>();
-                finalActions.add(new GuiDefinition.ButtonAction(actionType, actionValueField.getText()));
-                // Retain any other subsequent actions
-                for (int i = 1; i < btn.actions().size(); i++) {
-                    finalActions.add(btn.actions().get(i));
+                String actionsTxt = actionsField.getText();
+                if (!actionsTxt.isEmpty()) {
+                    for (String s : actionsTxt.split(";")) {
+                        finalActions.add(parseActionFromString(s));
+                    }
+                }
+                if (finalActions.isEmpty()) {
+                    finalActions.add(new GuiDefinition.ButtonAction(GuiDefinition.ActionType.CLOSE, ""));
                 }
 
                 GuiDefinition.Button newBtn = new GuiDefinition.Button(
@@ -802,7 +877,7 @@ public class GuiApiModMenuEntry implements ModMenuApi {
                     itemField.keyPressed(keyCode, scanCode, modifiers) ||
                     nameField.keyPressed(keyCode, scanCode, modifiers) ||
                     loreField.keyPressed(keyCode, scanCode, modifiers) ||
-                    actionValueField.keyPressed(keyCode, scanCode, modifiers)) {
+                    actionsField.keyPressed(keyCode, scanCode, modifiers)) {
                 return true;
             }
             return super.keyPressed(keyCode, scanCode, modifiers);
@@ -815,7 +890,7 @@ public class GuiApiModMenuEntry implements ModMenuApi {
                     itemField.charTyped(chr, modifiers) ||
                     nameField.charTyped(chr, modifiers) ||
                     loreField.charTyped(chr, modifiers) ||
-                    actionValueField.charTyped(chr, modifiers)) {
+                    actionsField.charTyped(chr, modifiers)) {
                 return true;
             }
             return super.charTyped(chr, modifiers);
@@ -837,6 +912,8 @@ public class GuiApiModMenuEntry implements ModMenuApi {
         private TextFieldWidget itemOffField;
         private TextFieldWidget nameOnField;
         private TextFieldWidget nameOffField;
+        private TextFieldWidget actionsOnField;  // Multiple Actions ON (separated by ;)
+        private TextFieldWidget actionsOffField; // Multiple Actions OFF (separated by ;)
 
         ToggleEditorScreen(ButtonEditorScreen parent, Optional<GuiDefinition.ToggleDefinition> currentToggle) {
             super(Text.literal("Edit Toggle Properties"));
@@ -861,42 +938,83 @@ public class GuiApiModMenuEntry implements ModMenuApi {
 
             // Tag Input
             addDrawableChild(new TextWidget(cx - 150, y, 300, 10, Text.literal("§eScoreboard Tag"), textRenderer));
-            y += 12;
-            tagField = new TextFieldWidget(textRenderer, cx - 150, y, 300, 18, Text.literal("Tag"));
+            y += 11;
+            tagField = new TextFieldWidget(textRenderer, cx - 150, y, 300, 17, Text.literal("Tag"));
             tagField.setText(tgl.tag());
             addDrawableChild(tagField);
-            y += 24;
+            y += 22;
 
             // Item ON / OFF Inputs
             addDrawableChild(new TextWidget(cx - 150, y, 145, 10, Text.literal("§eItem ON"), textRenderer));
             addDrawableChild(new TextWidget(cx + 5, y, 145, 10, Text.literal("§eItem OFF"), textRenderer));
-            y += 12;
+            y += 11;
 
-            itemOnField = new TextFieldWidget(textRenderer, cx - 150, y, 145, 18, Text.literal("Item ON"));
+            itemOnField = new TextFieldWidget(textRenderer, cx - 150, y, 145, 17, Text.literal("Item ON"));
             itemOnField.setText(tgl.itemOn());
             addDrawableChild(itemOnField);
 
-            itemOffField = new TextFieldWidget(textRenderer, cx + 5, y, 145, 18, Text.literal("Item OFF"));
+            itemOffField = new TextFieldWidget(textRenderer, cx + 5, y, 145, 17, Text.literal("Item OFF"));
             itemOffField.setText(tgl.itemOff());
             addDrawableChild(itemOffField);
-            y += 24;
+            y += 22;
 
             // Name ON / OFF Inputs
             addDrawableChild(new TextWidget(cx - 150, y, 145, 10, Text.literal("§eDisplay Name ON"), textRenderer));
             addDrawableChild(new TextWidget(cx + 5, y, 145, 10, Text.literal("§eDisplay Name OFF"), textRenderer));
-            y += 12;
+            y += 11;
 
-            nameOnField = new TextFieldWidget(textRenderer, cx - 150, y, 145, 18, Text.literal("Name ON"));
+            nameOnField = new TextFieldWidget(textRenderer, cx - 150, y, 145, 17, Text.literal("Name ON"));
             nameOnField.setText(tgl.nameOn());
             addDrawableChild(nameOnField);
 
-            nameOffField = new TextFieldWidget(textRenderer, cx + 5, y, 145, 18, Text.literal("Name OFF"));
+            nameOffField = new TextFieldWidget(textRenderer, cx + 5, y, 145, 17, Text.literal("Name OFF"));
             nameOffField.setText(tgl.nameOff());
             addDrawableChild(nameOffField);
-            y += 35;
+            y += 22;
+
+            // Actions ON / OFF Inputs (Separate by ;)
+            addDrawableChild(new TextWidget(cx - 150, y, 300, 10, Text.literal("§eActions ON (Separate by ';')"), textRenderer));
+            y += 11;
+            actionsOnField = new TextFieldWidget(textRenderer, cx - 150, y, 300, 17, Text.literal("Actions ON"));
+            actionsOnField.setMaxLength(512);
+            actionsOnField.setText(serializeActionsToString(tgl.actionsOn()));
+            addDrawableChild(actionsOnField);
+            y += 22;
+
+            addDrawableChild(new TextWidget(cx - 150, y, 300, 10, Text.literal("§eActions OFF (Separate by ';')"), textRenderer));
+            y += 11;
+            actionsOffField = new TextFieldWidget(textRenderer, cx - 150, y, 300, 17, Text.literal("Actions OFF"));
+            actionsOffField.setMaxLength(512);
+            actionsOffField.setText(serializeActionsToString(tgl.actionsOff()));
+            addDrawableChild(actionsOffField);
+            y += 26;
 
             // Save / Apply Toggle properties
             addDrawableChild(ButtonWidget.builder(Text.literal("Apply Toggle"), btn -> {
+                // Build Actions ON list
+                List<GuiDefinition.ButtonAction> finalOnActions = new ArrayList<>();
+                String onActionsTxt = actionsOnField.getText();
+                if (!onActionsTxt.isEmpty()) {
+                    for (String s : onActionsTxt.split(";")) {
+                        finalOnActions.add(parseActionFromString(s));
+                    }
+                }
+                if (finalOnActions.isEmpty()) {
+                    finalOnActions.add(new GuiDefinition.ButtonAction(GuiDefinition.ActionType.RUN_COMMAND, "tag @s remove " + tagField.getText(), GuiDefinition.RunWith.CONSOLE));
+                }
+
+                // Build Actions OFF list
+                List<GuiDefinition.ButtonAction> finalOffActions = new ArrayList<>();
+                String offActionsTxt = actionsOffField.getText();
+                if (!offActionsTxt.isEmpty()) {
+                    for (String s : offActionsTxt.split(";")) {
+                        finalOffActions.add(parseActionFromString(s));
+                    }
+                }
+                if (finalOffActions.isEmpty()) {
+                    finalOffActions.add(new GuiDefinition.ButtonAction(GuiDefinition.ActionType.RUN_COMMAND, "tag @s add " + tagField.getText(), GuiDefinition.RunWith.CONSOLE));
+                }
+
                 GuiDefinition.ToggleDefinition newToggle = new GuiDefinition.ToggleDefinition(
                         tagField.getText(),
                         itemOnField.getText(),
@@ -907,8 +1025,8 @@ public class GuiApiModMenuEntry implements ModMenuApi {
                         tgl.loreOff(),
                         tgl.glintOn(),
                         tgl.glintOff(),
-                        tgl.actionsOn(),
-                        tgl.actionsOff(),
+                        finalOnActions,
+                        finalOffActions,
                         tgl.customModelDataOn(),
                         tgl.customModelDataOff(),
                         tgl.itemModelOn(),
@@ -945,7 +1063,9 @@ public class GuiApiModMenuEntry implements ModMenuApi {
                     itemOnField.keyPressed(keyCode, scanCode, modifiers) ||
                     itemOffField.keyPressed(keyCode, scanCode, modifiers) ||
                     nameOnField.keyPressed(keyCode, scanCode, modifiers) ||
-                    nameOffField.keyPressed(keyCode, scanCode, modifiers)) {
+                    nameOffField.keyPressed(keyCode, scanCode, modifiers) ||
+                    actionsOnField.keyPressed(keyCode, scanCode, modifiers) ||
+                    actionsOffField.keyPressed(keyCode, scanCode, modifiers)) {
                 return true;
             }
             return super.keyPressed(keyCode, scanCode, modifiers);
@@ -957,14 +1077,12 @@ public class GuiApiModMenuEntry implements ModMenuApi {
                     itemOnField.charTyped(chr, modifiers) ||
                     itemOffField.charTyped(chr, modifiers) ||
                     nameOnField.charTyped(chr, modifiers) ||
-                    nameOffField.charTyped(chr, modifiers)) {
+                    nameOffField.charTyped(chr, modifiers) ||
+                    actionsOnField.charTyped(chr, modifiers) ||
+                    actionsOffField.charTyped(chr, modifiers)) {
                 return true;
             }
             return super.charTyped(chr, modifiers);
-        }
-
-        private static Text toggleText(boolean on) {
-            return on ? Text.literal("§aON") : Text.literal("§cOFF");
         }
     }
 }
