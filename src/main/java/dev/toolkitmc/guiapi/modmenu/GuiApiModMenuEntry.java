@@ -236,6 +236,7 @@ public class GuiApiModMenuEntry implements ModMenuApi {
         private int tickRate;
         private boolean closeOnMove;
         private List<GuiDefinition.Button> buttons;
+        private Optional<GuiDefinition.FillerConfig> filler;
 
         GuiEditorScreen(Screen parent, net.minecraft.util.Identifier id, GuiDefinition def) {
             super(Text.literal("Edit GUI — " + id.getPath()));
@@ -246,26 +247,31 @@ public class GuiApiModMenuEntry implements ModMenuApi {
             this.tickRate = def.getTickRate();
             this.closeOnMove = def.isCloseOnMove();
             this.buttons = new ArrayList<>(def.getButtons());
+            this.filler = def.getFiller();
         }
 
         public void updateButtons(List<GuiDefinition.Button> newButtons) {
             this.buttons = new ArrayList<>(newButtons);
         }
 
+        public void updateFiller(Optional<GuiDefinition.FillerConfig> newFiller) {
+            this.filler = newFiller;
+        }
+
         @Override
         protected void init() {
             int cx = width / 2;
-            int y = 40;
+            int y = 35;
 
             // Title Input
             addDrawableChild(new TextWidget(cx - 150, y, 300, 10, Text.literal("§eEdit GUI Title"), textRenderer));
-            y += 14;
-            titleField = new TextFieldWidget(textRenderer, cx - 150, y, 300, 20, Text.literal("Title"));
+            y += 12;
+            titleField = new TextFieldWidget(textRenderer, cx - 150, y, 300, 18, Text.literal("Title"));
             titleField.setMaxLength(128);
             titleField.setText(def.getTitle());
             titleField.setFocused(true);
             addDrawableChild(titleField);
-            y += 30;
+            y += 24;
 
             // Rows Configuration (Button to Cycle rows 1 to 6)
             addDrawableChild(new TextWidget(cx - 150, y + 4, 200, 10, Text.literal("§fGUI Rows"), textRenderer));
@@ -275,7 +281,7 @@ public class GuiApiModMenuEntry implements ModMenuApi {
                 btn.setMessage(Text.literal("§a" + rows));
             }).dimensions(cx + 60, y, 40, 18).build();
             addDrawableChild(rowsBtnRef[0]);
-            y += 24;
+            y += 22;
 
             // Close on Move Toggle
             addDrawableChild(new TextWidget(cx - 150, y + 4, 200, 10, Text.literal("§fClose on Move"), textRenderer));
@@ -285,39 +291,40 @@ public class GuiApiModMenuEntry implements ModMenuApi {
                 btn.setMessage(toggleText(closeOnMove));
             }).dimensions(cx + 60, y, 40, 18).build();
             addDrawableChild(closeOnMoveBtnRef[0]);
-            y += 24;
+            y += 22;
 
-            // Tick Rate Controls (Increment / Decrement Buttons)
+            // Tick Rate Controls
             addDrawableChild(new TextWidget(cx - 150, y + 4, 150, 10, Text.literal("§fTick Rate (Auto-Refresh)"), textRenderer));
-
-            // Display value widget
             TextWidget[] tickRateTextRef = new TextWidget[1];
             tickRateTextRef[0] = new TextWidget(cx + 10, y + 4, 40, 10, Text.literal("§e" + tickRate), textRenderer);
             addDrawableChild(tickRateTextRef[0]);
 
-            // Decrement -5
             addDrawableChild(ButtonWidget.builder(Text.literal("-5"), btn -> {
                 tickRate = Math.max(0, tickRate - 5);
                 tickRateTextRef[0].setMessage(Text.literal("§e" + tickRate));
             }).dimensions(cx + 50, y, 20, 18).build());
 
-            // Increment +5
             addDrawableChild(ButtonWidget.builder(Text.literal("+5"), btn -> {
                 tickRate = Math.min(2400, tickRate + 5);
                 tickRateTextRef[0].setMessage(Text.literal("§e" + tickRate));
             }).dimensions(cx + 75, y, 20, 18).build());
-            y += 30;
+            y += 24;
+
+            // Edit Background Filler
+            addDrawableChild(ButtonWidget.builder(Text.literal("§dEdit Background Filler"), btn ->
+                    MinecraftClient.getInstance().setScreen(new FillerEditorScreen(this, id, filler))
+            ).dimensions(cx - 150, y, 300, 18).build());
+            y += 22;
 
             // Edit Buttons Navigation
             addDrawableChild(ButtonWidget.builder(Text.literal("§bEdit GUI Buttons"), btn ->
                     MinecraftClient.getInstance().setScreen(new ButtonListScreen(this, id, def))
             ).dimensions(cx - 150, y, 300, 18).build());
-            y += 30;
+            y += 28;
 
             // Action Buttons
             // Save & Back
             addDrawableChild(ButtonWidget.builder(Text.literal("Apply & Back"), btn -> {
-                // Use factory method to avoid any package constructor access constraints
                 GuiDefinition newDef = GuiDefinition.create(
                         def.getId(),
                         titleField.getText(),
@@ -325,7 +332,7 @@ public class GuiApiModMenuEntry implements ModMenuApi {
                         buttons,
                         def.getOnOpen(),
                         def.getOnClose(),
-                        def.getFiller(),
+                        filler,
                         tickRate,
                         closeOnMove
                 );
@@ -358,6 +365,128 @@ public class GuiApiModMenuEntry implements ModMenuApi {
         @Override
         public boolean charTyped(char chr, int modifiers) {
             if (titleField.charTyped(chr, modifiers)) {
+                return true;
+            }
+            return super.charTyped(chr, modifiers);
+        }
+
+        private static Text toggleText(boolean on) {
+            return on ? Text.literal("§aON") : Text.literal("§cOFF");
+        }
+    }
+
+    // ── Filler Editor Screen ─────────────────────────────────────────────────
+
+    static class FillerEditorScreen extends Screen {
+        private final GuiEditorScreen parent;
+        private final net.minecraft.util.Identifier id;
+        private final Optional<GuiDefinition.FillerConfig> currentFiller;
+
+        private TextFieldWidget itemField;
+        private TextFieldWidget nameField;
+        private boolean glint;
+        private boolean hideTooltip;
+
+        FillerEditorScreen(GuiEditorScreen parent, net.minecraft.util.Identifier id, Optional<GuiDefinition.FillerConfig> currentFiller) {
+            super(Text.literal("Edit Background Filler"));
+            this.parent = parent;
+            this.id = id;
+            this.currentFiller = currentFiller;
+
+            GuiDefinition.FillerConfig fill = currentFiller.orElse(
+                    new GuiDefinition.FillerConfig("minecraft:gray_stained_glass_pane", " ", false, true)
+            );
+            this.glint = fill.glint();
+            this.hideTooltip = fill.hideTooltip();
+        }
+
+        @Override
+        protected void init() {
+            int cx = width / 2;
+            int y = 35;
+
+            GuiDefinition.FillerConfig fill = currentFiller.orElse(
+                    new GuiDefinition.FillerConfig("minecraft:gray_stained_glass_pane", " ", false, true)
+            );
+
+            // Item ID Input
+            addDrawableChild(new TextWidget(cx - 150, y, 300, 10, Text.literal("§eFiller Item ID"), textRenderer));
+            y += 12;
+            itemField = new TextFieldWidget(textRenderer, cx - 150, y, 300, 18, Text.literal("Item ID"));
+            itemField.setMaxLength(256);
+            itemField.setText(fill.item());
+            addDrawableChild(itemField);
+            y += 24;
+
+            // Display Name Input
+            addDrawableChild(new TextWidget(cx - 150, y, 300, 10, Text.literal("§eDisplay Name"), textRenderer));
+            y += 12;
+            nameField = new TextFieldWidget(textRenderer, cx - 150, y, 300, 18, Text.literal("Display Name"));
+            nameField.setMaxLength(128);
+            nameField.setText(fill.name());
+            addDrawableChild(nameField);
+            y += 26;
+
+            // Glint Toggle
+            addDrawableChild(new TextWidget(cx - 150, y + 4, 200, 10, Text.literal("§fGlint Effect"), textRenderer));
+            ButtonWidget[] glintBtnRef = new ButtonWidget[1];
+            glintBtnRef[0] = ButtonWidget.builder(toggleText(glint), btn -> {
+                glint = !glint;
+                btn.setMessage(toggleText(glint));
+            }).dimensions(cx + 60, y, 50, 18).build();
+            addDrawableChild(glintBtnRef[0]);
+            y += 22;
+
+            // Hide Tooltip Toggle
+            addDrawableChild(new TextWidget(cx - 150, y + 4, 200, 10, Text.literal("§fHide Tooltip"), textRenderer));
+            ButtonWidget[] hideTooltipBtnRef = new ButtonWidget[1];
+            hideTooltipBtnRef[0] = ButtonWidget.builder(toggleText(hideTooltip), btn -> {
+                hideTooltip = !hideTooltip;
+                btn.setMessage(toggleText(hideTooltip));
+            }).dimensions(cx + 60, y, 50, 18).build();
+            addDrawableChild(hideTooltipBtnRef[0]);
+            y += 35;
+
+            // Save
+            addDrawableChild(ButtonWidget.builder(Text.literal("Apply Filler"), btn -> {
+                GuiDefinition.FillerConfig newFiller = new GuiDefinition.FillerConfig(
+                        itemField.getText(),
+                        nameField.getText(),
+                        glint,
+                        hideTooltip
+                );
+                parent.updateFiller(Optional.of(newFiller));
+                MinecraftClient.getInstance().setScreen(parent);
+            }).dimensions(cx - 105, height - 25, 100, 20).build());
+
+            // Remove Filler completely
+            addDrawableChild(ButtonWidget.builder(Text.literal("Disable Filler"), btn -> {
+                parent.updateFiller(Optional.empty());
+                MinecraftClient.getInstance().setScreen(parent);
+            }).dimensions(cx + 5, height - 25, 100, 20).build());
+        }
+
+        @Override
+        public void render(DrawContext ctx, int mouseX, int mouseY, float delta) {
+            super.render(ctx, mouseX, mouseY, delta);
+            ctx.drawCenteredTextWithShadow(textRenderer,
+                    Text.literal("§6Edit Background Filler"), width / 2, 10, 0xFFFFFF);
+            ctx.fill(width / 2 - 150, height - 32, width / 2 + 150, height - 31, 0x44FFFFFF);
+        }
+
+        @Override
+        public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+            if (itemField.keyPressed(keyCode, scanCode, modifiers) ||
+                    nameField.keyPressed(keyCode, scanCode, modifiers)) {
+                return true;
+            }
+            return super.keyPressed(keyCode, scanCode, modifiers);
+        }
+
+        @Override
+        public boolean charTyped(char chr, int modifiers) {
+            if (itemField.charTyped(chr, modifiers) ||
+                    nameField.charTyped(chr, modifiers)) {
                 return true;
             }
             return super.charTyped(chr, modifiers);
@@ -469,7 +598,14 @@ public class GuiApiModMenuEntry implements ModMenuApi {
         private TextFieldWidget itemField;
         private TextFieldWidget nameField;
         private TextFieldWidget amountField;
+        private TextFieldWidget loreField; // Combined Lore input field (separated by ;)
+        
+        // Primary click action fields
+        private GuiDefinition.ActionType actionType;
+        private TextFieldWidget actionValueField;
+
         private boolean glint;
+        private Optional<GuiDefinition.ToggleDefinition> toggle;
 
         ButtonEditorScreen(ButtonListScreen parent, int index, GuiDefinition.Button btn) {
             super(Text.literal("Edit Button"));
@@ -477,34 +613,54 @@ public class GuiApiModMenuEntry implements ModMenuApi {
             this.index = index;
             this.btn = btn;
             this.glint = btn.glint();
+            this.toggle = btn.toggle();
+
+            // Load primary action from existing action list
+            if (!btn.actions().isEmpty()) {
+                this.actionType = btn.actions().get(0).type();
+            } else {
+                this.actionType = GuiDefinition.ActionType.CLOSE;
+            }
+        }
+
+        public void updateToggle(Optional<GuiDefinition.ToggleDefinition> newToggle) {
+            this.toggle = newToggle;
         }
 
         @Override
         protected void init() {
             int cx = width / 2;
-            int y = 30;
+            int y = 25;
 
             // Slot Input
             addDrawableChild(new TextWidget(cx - 150, y, 100, 10, Text.literal("§eSlot (0-53)"), textRenderer));
-            slotField = new TextFieldWidget(textRenderer, cx - 150, y + 12, 80, 18, Text.literal("Slot"));
+            slotField = new TextFieldWidget(textRenderer, cx - 150, y + 12, 60, 18, Text.literal("Slot"));
             slotField.setText(String.valueOf(btn.slot()));
             addDrawableChild(slotField);
 
             // Amount Input
-            addDrawableChild(new TextWidget(cx - 50, y, 100, 10, Text.literal("§eAmount"), textRenderer));
-            amountField = new TextFieldWidget(textRenderer, cx - 50, y + 12, 80, 18, Text.literal("Amount"));
+            addDrawableChild(new TextWidget(cx - 80, y, 100, 10, Text.literal("§eAmount"), textRenderer));
+            amountField = new TextFieldWidget(textRenderer, cx - 80, y + 12, 60, 18, Text.literal("Amount"));
             amountField.setText(btn.amount());
             addDrawableChild(amountField);
 
             // Glint Toggle
-            addDrawableChild(new TextWidget(cx + 50, y, 100, 10, Text.literal("§eGlint Effect"), textRenderer));
+            addDrawableChild(new TextWidget(cx - 10, y, 100, 10, Text.literal("§eGlint"), textRenderer));
             ButtonWidget[] glintBtnRef = new ButtonWidget[1];
             glintBtnRef[0] = ButtonWidget.builder(toggleText(glint), b -> {
                 glint = !glint;
                 b.setMessage(toggleText(glint));
-            }).dimensions(cx + 50, y + 12, 100, 18).build();
+            }).dimensions(cx - 10, y + 12, 40, 18).build();
             addDrawableChild(glintBtnRef[0]);
-            y += 42;
+
+            // Edit Toggle Properties Navigation
+            addDrawableChild(new TextWidget(cx + 40, y, 110, 10, Text.literal("§eToggle Button"), textRenderer));
+            ButtonWidget[] toggleBtnRef = new ButtonWidget[1];
+            toggleBtnRef[0] = ButtonWidget.builder(Text.literal(toggle.isPresent() ? "§aCONFIGURED" : "§cDISABLED"), b -> {
+                MinecraftClient.getInstance().setScreen(new ToggleEditorScreen(this, toggle));
+            }).dimensions(cx + 40, y + 12, 110, 18).build();
+            addDrawableChild(toggleBtnRef[0]);
+            y += 38;
 
             // Item ID Input
             addDrawableChild(new TextWidget(cx - 150, y, 300, 10, Text.literal("§eItem ID"), textRenderer));
@@ -513,7 +669,7 @@ public class GuiApiModMenuEntry implements ModMenuApi {
             itemField.setMaxLength(256);
             itemField.setText(btn.item());
             addDrawableChild(itemField);
-            y += 30;
+            y += 24;
 
             // Display Name Input
             addDrawableChild(new TextWidget(cx - 150, y, 300, 10, Text.literal("§eDisplay Name"), textRenderer));
@@ -522,7 +678,55 @@ public class GuiApiModMenuEntry implements ModMenuApi {
             nameField.setMaxLength(128);
             nameField.setText(btn.name());
             addDrawableChild(nameField);
-            y += 40;
+            y += 24;
+
+            // Lore Input (joined by ;)
+            addDrawableChild(new TextWidget(cx - 150, y, 300, 10, Text.literal("§eLore Lines (Separate by semicolon ';')"), textRenderer));
+            y += 12;
+            loreField = new TextFieldWidget(textRenderer, cx - 150, y, 300, 18, Text.literal("Lore"));
+            loreField.setMaxLength(512);
+            loreField.setText(String.join(";", btn.lore()));
+            addDrawableChild(loreField);
+            y += 24;
+
+            // Action Properties Configuration
+            addDrawableChild(new TextWidget(cx - 150, y, 140, 10, Text.literal("§eAction Type"), textRenderer));
+            addDrawableChild(new TextWidget(cx + 5, y, 145, 10, Text.literal("§eAction Value"), textRenderer));
+            y += 12;
+
+            // Action Type Cycle Button
+            ButtonWidget[] actionTypeBtnRef = new ButtonWidget[1];
+            actionTypeBtnRef[0] = ButtonWidget.builder(Text.literal("§b" + actionType.name()), btn -> {
+                // Cycle through a few very common actions
+                GuiDefinition.ActionType[] commonTypes = {
+                        GuiDefinition.ActionType.CLOSE,
+                        GuiDefinition.ActionType.REFRESH,
+                        GuiDefinition.ActionType.MESSAGE,
+                        GuiDefinition.ActionType.ACTION_BAR,
+                        GuiDefinition.ActionType.SOUND,
+                        GuiDefinition.ActionType.RUN_COMMAND,
+                        GuiDefinition.ActionType.OPEN_GUI,
+                        GuiDefinition.ActionType.TAKE_ITEM
+                };
+                int nextIdx = 0;
+                for (int i = 0; i < commonTypes.length; i++) {
+                    if (commonTypes[i] == actionType) {
+                        nextIdx = (i + 1) % commonTypes.length;
+                        break;
+                    }
+                }
+                actionType = commonTypes[nextIdx];
+                btn.setMessage(Text.literal("§b" + actionType.name()));
+            }).dimensions(cx - 150, y, 145, 18).build();
+            addDrawableChild(actionTypeBtnRef[0]);
+
+            // Action Value Input
+            String actionVal = (!btn.actions().isEmpty()) ? btn.actions().get(0).value() : "";
+            actionValueField = new TextFieldWidget(textRenderer, cx + 5, y, 145, 18, Text.literal("Action Value"));
+            actionValueField.setMaxLength(512);
+            actionValueField.setText(actionVal);
+            addDrawableChild(actionValueField);
+            y += 24;
 
             // Actions
             // Save/Apply
@@ -532,17 +736,34 @@ public class GuiApiModMenuEntry implements ModMenuApi {
                     slotVal = Math.max(0, Integer.parseInt(slotField.getText()));
                 } catch (NumberFormatException ignored) {}
 
+                // Build Lore list by splitting by ;
+                List<String> finalLore = new ArrayList<>();
+                String loreTxt = loreField.getText();
+                if (!loreTxt.isEmpty()) {
+                    for (String s : loreTxt.split(";")) {
+                        finalLore.add(s);
+                    }
+                }
+
+                // Construct primary action from input
+                List<GuiDefinition.ButtonAction> finalActions = new ArrayList<>();
+                finalActions.add(new GuiDefinition.ButtonAction(actionType, actionValueField.getText()));
+                // Retain any other subsequent actions
+                for (int i = 1; i < btn.actions().size(); i++) {
+                    finalActions.add(btn.actions().get(i));
+                }
+
                 GuiDefinition.Button newBtn = new GuiDefinition.Button(
                         slotVal,
                         btn.page(),
                         itemField.getText(),
                         nameField.getText(),
-                        btn.lore(),
+                        finalLore,
                         glint,
                         btn.clickType(),
                         btn.condition(),
-                        btn.actions(),
-                        btn.toggle(),
+                        finalActions,
+                        toggle,
                         btn.customModelData(),
                         btn.itemModel(),
                         amountField.getText(),
@@ -551,18 +772,18 @@ public class GuiApiModMenuEntry implements ModMenuApi {
                 );
                 parent.updateButton(index, newBtn);
                 MinecraftClient.getInstance().setScreen(parent);
-            }).dimensions(cx - 155, height - 30, 100, 20).build());
+            }).dimensions(cx - 155, height - 25, 100, 20).build());
 
             // Delete Button
             addDrawableChild(ButtonWidget.builder(Text.literal("§cDelete Button"), b -> {
                 parent.deleteButton(index);
                 MinecraftClient.getInstance().setScreen(parent);
-            }).dimensions(cx - 50, height - 30, 100, 20).build());
+            }).dimensions(cx - 50, height - 25, 100, 20).build());
 
             // Cancel
             addDrawableChild(ButtonWidget.builder(Text.literal("Cancel"), b ->
                     MinecraftClient.getInstance().setScreen(parent))
-                    .dimensions(cx + 55, height - 30, 100, 20).build());
+                    .dimensions(cx + 55, height - 25, 100, 20).build());
         }
 
         @Override
@@ -570,7 +791,7 @@ public class GuiApiModMenuEntry implements ModMenuApi {
             super.render(ctx, mouseX, mouseY, delta);
             ctx.drawCenteredTextWithShadow(textRenderer,
                     Text.literal("§6Edit Button Properties"), width / 2, 10, 0xFFFFFF);
-            ctx.fill(width / 2 - 150, height - 38, width / 2 + 150, height - 37, 0x44FFFFFF);
+            ctx.fill(width / 2 - 150, height - 32, width / 2 + 150, height - 31, 0x44FFFFFF);
         }
 
         @Override
@@ -578,7 +799,9 @@ public class GuiApiModMenuEntry implements ModMenuApi {
             if (slotField.keyPressed(keyCode, scanCode, modifiers) ||
                     amountField.keyPressed(keyCode, scanCode, modifiers) ||
                     itemField.keyPressed(keyCode, scanCode, modifiers) ||
-                    nameField.keyPressed(keyCode, scanCode, modifiers)) {
+                    nameField.keyPressed(keyCode, scanCode, modifiers) ||
+                    loreField.keyPressed(keyCode, scanCode, modifiers) ||
+                    actionValueField.keyPressed(keyCode, scanCode, modifiers)) {
                 return true;
             }
             return super.keyPressed(keyCode, scanCode, modifiers);
@@ -589,7 +812,9 @@ public class GuiApiModMenuEntry implements ModMenuApi {
             if (slotField.charTyped(chr, modifiers) ||
                     amountField.charTyped(chr, modifiers) ||
                     itemField.charTyped(chr, modifiers) ||
-                    nameField.charTyped(chr, modifiers)) {
+                    nameField.charTyped(chr, modifiers) ||
+                    loreField.charTyped(chr, modifiers) ||
+                    actionValueField.charTyped(chr, modifiers)) {
                 return true;
             }
             return super.charTyped(chr, modifiers);
@@ -597,6 +822,132 @@ public class GuiApiModMenuEntry implements ModMenuApi {
 
         private static Text toggleText(boolean on) {
             return on ? Text.literal("§aON") : Text.literal("§cOFF");
+        }
+    }
+
+    // ── Toggle Editor Screen ─────────────────────────────────────────────────
+
+    static class ToggleEditorScreen extends Screen {
+        private final ButtonEditorScreen parent;
+        private final Optional<GuiDefinition.ToggleDefinition> currentToggle;
+
+        private TextFieldWidget tagField;
+        private TextFieldWidget itemOnField;
+        private TextFieldWidget itemOffField;
+        private TextFieldWidget nameOnField;
+        private TextFieldWidget nameOffField;
+
+        ToggleEditorScreen(ButtonEditorScreen parent, Optional<GuiDefinition.ToggleDefinition> currentToggle) {
+            super(Text.literal("Edit Toggle Properties"));
+            this.parent = parent;
+            this.currentToggle = currentToggle;
+        }
+
+        @Override
+        protected void init() {
+            int cx = width / 2;
+            int y = 30;
+
+            GuiDefinition.ToggleDefinition tgl = currentToggle.orElse(
+                    new GuiDefinition.ToggleDefinition(
+                            "pvp_enabled", "minecraft:lime_dye", "minecraft:gray_dye",
+                            "§aEnabled", "§7Disabled", List.of(), List.of(), false, false,
+                            List.of(), List.of()
+                    )
+            );
+
+            // Tag Input
+            addDrawableChild(new TextWidget(cx - 150, y, 300, 10, Text.literal("§eScoreboard Tag"), textRenderer));
+            y += 12;
+            tagField = new TextFieldWidget(textRenderer, cx - 150, y, 300, 18, Text.literal("Tag"));
+            tagField.setText(tgl.tag());
+            addDrawableChild(tagField);
+            y += 24;
+
+            // Item ON / OFF Inputs
+            addDrawableChild(new TextWidget(cx - 150, y, 145, 10, Text.literal("§eItem ON"), textRenderer));
+            addDrawableChild(new TextWidget(cx + 5, y, 145, 10, Text.literal("§eItem OFF"), textRenderer));
+            y += 12;
+
+            itemOnField = new TextFieldWidget(textRenderer, cx - 150, y, 145, 18, Text.literal("Item ON"));
+            itemOnField.setText(tgl.itemOn());
+            addDrawableChild(itemOnField);
+
+            itemOffField = new TextFieldWidget(textRenderer, cx + 5, y, 145, 18, Text.literal("Item OFF"));
+            itemOffField.setText(tgl.itemOff());
+            addDrawableChild(itemOffField);
+            y += 24;
+
+            // Name ON / OFF Inputs
+            addDrawableChild(new TextWidget(cx - 150, y, 145, 10, Text.literal("§eDisplay Name ON"), textRenderer));
+            addDrawableChild(new TextWidget(cx + 5, y, 145, 10, Text.literal("§eDisplay Name OFF"), textRenderer));
+            y += 12;
+
+            nameOnField = new TextFieldWidget(textRenderer, cx - 150, y, 145, 18, Text.literal("Name ON"));
+            nameOnField.setText(tgl.nameOn());
+            addDrawableChild(nameOnField);
+
+            nameOffField = new TextFieldWidget(textRenderer, cx + 5, y, 145, 18, Text.literal("Name OFF"));
+            nameOffField.setText(tgl.nameOff());
+            addDrawableChild(nameOffField);
+            y += 35;
+
+            // Save / Apply Toggle properties
+            addDrawableChild(ButtonWidget.builder(Text.literal("Apply Toggle"), btn -> {
+                GuiDefinition.ToggleDefinition newToggle = new GuiDefinition.ToggleDefinition(
+                        tagField.getText(),
+                        itemOnField.getText(),
+                        itemOffField.getText(),
+                        nameOnField.getText(),
+                        nameOffField.getText(),
+                        tgl.loreOn(),
+                        tgl.loreOff(),
+                        tgl.glintOn(),
+                        tgl.glintOff(),
+                        tgl.actionsOn(),
+                        tgl.actionsOff()
+                );
+                parent.updateToggle(Optional.of(newToggle));
+                MinecraftClient.getInstance().setScreen(parent);
+            }).dimensions(cx - 105, height - 25, 100, 20).build());
+
+            // Disable Toggle Completely
+            addDrawableChild(ButtonWidget.builder(Text.literal("Disable Toggle"), btn -> {
+                parent.updateToggle(Optional.empty());
+                MinecraftClient.getInstance().setScreen(parent);
+            }).dimensions(cx + 5, height - 25, 100, 20).build());
+        }
+
+        @Override
+        public void render(DrawContext ctx, int mouseX, int mouseY, float delta) {
+            super.render(ctx, mouseX, mouseY, delta);
+            ctx.drawCenteredTextWithShadow(textRenderer,
+                    Text.literal("§6Edit Toggle Properties"), width / 2, 10, 0xFFFFFF);
+            ctx.fill(width / 2 - 150, height - 32, width / 2 + 150, height - 31, 0x44FFFFFF);
+        }
+
+        @Override
+        public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+            if (tagField.keyPressed(keyCode, scanCode, modifiers) ||
+                    itemOnField.keyPressed(keyCode, scanCode, modifiers) ||
+                    itemOffField.keyPressed(keyCode, scanCode, modifiers) ||
+                    nameOnField.keyPressed(keyCode, scanCode, modifiers) ||
+                    nameOffField.keyPressed(keyCode, scanCode, modifiers)) {
+                return true;
+            }
+            return super.keyPressed(keyCode, scanCode, modifiers);
+        }
+
+        @Override
+        public boolean charTyped(char chr, int modifiers) {
+            if (tagField.charTyped(chr, modifiers) ||
+                    itemOnField.charTyped(chr, modifiers) ||
+                    itemOffField.charTyped(chr, modifiers) ||
+                    nameOnField.charTyped(chr, modifiers) ||
+                    nameOffField.charTyped(chr, modifiers)) {
+                return true;
+            }
+            return super.charTyped(chr, modifiers);
         }
     }
 }
