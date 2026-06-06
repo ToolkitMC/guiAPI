@@ -13,13 +13,6 @@ import java.nio.file.Path;
 /**
  * Persistent config for GUI API.
  * Stored at: config/guiapi.json
- *
- * Fields:
- *   allow_console_run_with  — whether run_with:console actions are allowed (default: true)
- *   log_unknown_items       — WARN when an unknown item ID is used in a button (default: true)
- *   log_unknown_sounds      — WARN when an unknown sound ID is used in a sound action (default: true)
- *   allow_close_on_move     — whether close_on_move is enabled globally (default: true)
- *   allow_delayed_actions   — whether action delays are executed globally (default: true)
  */
 public final class GuiApiConfig {
 
@@ -38,6 +31,8 @@ public final class GuiApiConfig {
     private boolean debugMode           = false;
     private boolean allowCloseOnMove    = true;
     private boolean allowDelayedActions = true;
+    private int     openMenuKey         = 71; // Default: G (GLFW keycode 71)
+    private int     toggleSearchKey     = 70; // Default: F (GLFW keycode 70)
 
     private GuiApiConfig() {}
 
@@ -67,6 +62,10 @@ public final class GuiApiConfig {
                 allowCloseOnMove = obj.get("allow_close_on_move").getAsBoolean();
             if (obj.has("allow_delayed_actions"))
                 allowDelayedActions = obj.get("allow_delayed_actions").getAsBoolean();
+            if (obj.has("open_menu_key"))
+                openMenuKey = obj.get("open_menu_key").getAsInt();
+            if (obj.has("toggle_search_key"))
+                toggleSearchKey = obj.get("toggle_search_key").getAsInt();
 
         } catch (IOException e) {
             GuiApiMod.LOGGER.error("[GuiAPI] Failed to load config: {}", e.getMessage());
@@ -82,6 +81,8 @@ public final class GuiApiConfig {
         obj.addProperty("debug_mode",              debugMode);
         obj.addProperty("allow_close_on_move",     allowCloseOnMove);
         obj.addProperty("allow_delayed_actions",   allowDelayedActions);
+        obj.addProperty("open_menu_key",           openMenuKey);
+        obj.addProperty("toggle_search_key",       toggleSearchKey);
         try {
             Files.writeString(CONFIG_PATH, GSON.toJson(obj));
         } catch (IOException e) {
@@ -109,4 +110,10 @@ public final class GuiApiConfig {
 
     public boolean isAllowDelayedActions()         { return allowDelayedActions; }
     public void setAllowDelayedActions(boolean v)  { allowDelayedActions = v; }
+
+    public int getOpenMenuKey()                   { return openMenuKey; }
+    public void setOpenMenuKey(int v)             { openMenuKey = v; }
+
+    public int getToggleSearchKey()               { return toggleSearchKey; }
+    public void setToggleSearchKey(int v)         { toggleSearchKey = v; }
 }
