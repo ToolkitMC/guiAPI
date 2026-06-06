@@ -7,11 +7,11 @@ No client mod required. No macros. No external dependencies beyond Fabric API.
 
 ## Installation
 
-1. Drop `guiapi-1.0.3.jar` into your `mods/` folder.
+1. Drop `guiapi-1.0.4.jar` into your `mods/` folder.
 2. Drop your datapack into `world/datapacks/`.
 3. Run `/reload` or `/guiapi reload`.
 
-Optionally install [Mod Menu](https://modrinth.com/mod/modmenu) to see loaded GUIs in the mod list.
+Optionally install [Mod Menu](https://modrinth.com/mod/modmenu) to see loaded GUIs and visually edit them in-game!
 
 ---
 
@@ -29,14 +29,7 @@ Optionally install [Mod Menu](https://modrinth.com/mod/modmenu) to see loaded GU
 | `/guiapi var clear <player>` | Clear all runtime variables for a player |
 | `/guiapi help` | Show command and JSON field reference in-game |
 
-**Permission level 2** (OP) required.
-
-Calling from a datapack function:
-
-```mcfunction
-# data/example/function/open_panel.mcfunction
-execute as @a[tag=admin] run guiapi open example:admin_panel @s
-```
+**Permission level 2** (OP) required by default (configurable in Mod Menu).
 
 ---
 
@@ -60,9 +53,25 @@ The GUI ID used in commands is `<namespace>:<name>` — matching the file path u
 |-------|------|---------|-------------|
 | `title` | string | `"GUI"` | Inventory title. Supports `§` color codes and placeholders. |
 | `rows` | int 1–6 | `3` | Number of rows (9 slots each). |
+| `tick_rate` | int | `0` | Auto-refresh interval in ticks (e.g., `20` = 1s). Set `0` to disable. |
+| `close_on_move` | boolean | `false` | If true, closes screen if player walks away (> 1.5 blocks). |
+| `filler` | object | — | Background filler configuration (see below). |
 | `on_open` | action[] | `[]` | Actions executed when the GUI is opened. |
 | `on_close` | action[] | `[]` | Actions executed when the GUI is closed (any reason). |
 | `buttons` | button[] | `[]` | List of button definitions. |
+
+#### Filler fields
+
+Any empty slot in the inventory is automatically populated with this background item.
+
+```json
+"filler": {
+  "item": "minecraft:gray_stained_glass_pane",
+  "name": " ",
+  "glint": false,
+  "hide_tooltip": true
+}
+```
 
 ### Button fields
 
@@ -74,19 +83,19 @@ The GUI ID used in commands is `<namespace>:<name>` — matching the file path u
 | `name` | string | `""` | Display name. Supports color codes and placeholders. |
 | `lore` | string[] | `[]` | Lore lines. Supports placeholders. |
 | `glint` | boolean | `false` | Apply enchantment glint effect. |
-| `amount` | string | `"1"` | Item stack count. Supports color codes and placeholders (e.g., `{var:counter}`). |
-| `hide_tooltip` | boolean | `false` | Hides the item's name and lore entirely from tooltip. |
-| `hide_additional_tooltip` | boolean | `false` | Hides armor armor-modifiers, sword damage stats, dye colors, etc. |
-| `custom_model_data` | int or object | — | Sets custom model data component (supports legacy int and 1.21.4+ composite object formats). |
-| `item_model` | string | — | Sets the custom item model component ID (1.21.2+). |
+| `amount` | string | `"1"` | Item stack count (supports placeholders like `{var:counter}`). |
+| `hide_tooltip` | boolean | `false` | Hides item name and lore from hover tooltip. |
+| `hide_additional_tooltip` | boolean | `false` | Hides attributes, enchantments, and clutter. |
+| `custom_model_data` | int or object | — | Custom model data component (supports legacy int and 1.21.4+ composite object). |
+| `item_model` | string | — | Custom item model component ID (1.21.2+). |
 | `click_type` | string | `"any"` | Which click triggers actions: `any` · `left` · `right` · `shift` |
 | `condition` | object | — | Visibility condition (see below). |
-| `actions` | action[] | `[close]` | Actions executed in order on click. |
+| `actions` | action[] | `[close]` | Actions executed in order on click. Supports `"delay": int` (ticks). |
 | `toggle` | object | — | Toggle definition — replaces `item`/`actions` (see below). |
 
-> **Legacy:** A single `"action": {}` object is still accepted.
+---
 
-### Placeholders
+## Placeholders
 
 Supported in `title`, button `name`, `lore`, `message` values, and `run_command` values.
 
@@ -100,45 +109,40 @@ Supported in `title`, button `name`, `lore`, `message` values, and `run_command`
 | `{score:objective}` | Player's score in the given scoreboard objective |
 | `{var:key}` | Player's runtime variable `key` (empty string if unset) |
 
-### `click_type` values
+---
 
-| Value | Triggers on |
-|-------|-------------|
-| `any` | Left click, right click, or shift+click (default) |
-| `left` | Left click only |
-| `right` | Right click only |
-| `shift` | Shift+left click only |
+## Action types
 
-### Action types
+Any action can be delayed by adding `"delay": int` (in ticks) to its JSON block.
 
-| Type | `value` field | `run_with` | Description |
+| Type | `value` format | `run_with` | Description |
 |------|--------------|------------|-------------|
 | `run_command` | Command string | `player` · `console` | Run a command. Default: player. Supports placeholders. |
 | `close` | — | — | Close the GUI. |
+| `refresh` | — | — | Refresh the current GUI inventory dynamically (no closing/flicker). |
 | `open_gui` | `namespace:name` | — | Close and open another GUI. |
 | `message` | Text string | — | Send a chat message to the player. Supports placeholders. |
-| `sound` | `namespace:sound.id` or `namespace:sound.id:volume:pitch` | — | Play a sound to the player. Volume and pitch default to `1.0`. |
-| `set_var` | New value (supports placeholders) | — | Set a runtime variable. Requires `"var": "key"` field. |
-| `add_var` | Integer to add | — | Add an integer to a runtime variable (creates it at 0 if unset). Requires `"var": "key"`. |
+| `action_bar` | Text string | — | Send an action bar message directly to the player. |
+| `sound` | `sound.id` or `sound.id:volume:pitch` | — | Play a sound. Volume/pitch default to `1.0`. Supports placeholders. |
+| `set_score` | `objective:value` | — | Set player's scoreboard objective score directly (supports placeholders). |
+| `add_score` | `objective:value` | — | Add score to player's scoreboard objective directly. |
+| `sub_score` | `objective:value` | — | Subtract score from player's scoreboard objective directly. |
+| `take_item` | `itemId:amount` | — | Deduct a specified amount of an item from the player's inventory. |
+| `add_effect` | `effect_id:duration:amplifier:particles` | — | Give player status effect (duration in seconds, particles true/false). |
+| `remove_effect` | `effect_id` | — | Remove a specific status effect from the player. |
+| `clear_effects` | — | — | Clear all status effects from the player. |
+| `set_var` | New value | — | Set a runtime variable. Requires `"var": "key"`. |
+| `add_var` | Integer to add | — | Add an integer to a runtime variable. Requires `"var": "key"`. |
 | `sub_var` | Integer to subtract | — | Subtract an integer from a runtime variable. Requires `"var": "key"`. |
 | `reset_var` | — | — | Delete a single runtime variable. Requires `"var": "key"`. |
 | `clear_vars` | — | — | Delete all runtime variables for this player. |
 | `next_page` | — | — | Go to the next page. |
 | `prev_page` | — | — | Go to the previous page. |
 | `goto_page` | Page index (string) | — | Jump to a specific page. |
-| `refresh` | — | — | Refresh the current GUI inventory dynamically (no closing/flicker). |
-| `take_item` | `itemId:amount` | — | Deducts a specified amount of an item from the player's inventory. |
-| `set_score` | `objective:value` | — | Sets a player scoreboard objective directly (supports placeholders). |
-| `add_score` | `objective:value` | — | Adds a value to a player scoreboard objective directly (supports placeholders). |
-| `sub_score` | `objective:value` | — | Subtracts a value from a player scoreboard objective directly (supports placeholders). |
-| `action_bar` | Text string | — | Sends an action bar message directly to the player. Supports placeholders. |
-| `add_effect` | `effect_id:duration:amplifier:particles` | — | Gives the player a status effect (duration in seconds, particles true/false). |
-| `remove_effect` | `effect_id` | — | Removes a specific status effect from the player. |
-| `clear_effects` | — | — | Clears all status effects from the player. |
 
-Multiple actions are executed in order. `close`, `open_gui`, `next_page`, `prev_page`, and `goto_page` stop the chain after executing.
+---
 
-### Condition types
+## Condition types
 
 Conditions control button **visibility**. Hidden buttons cannot be clicked.
 
@@ -162,7 +166,9 @@ Conditions control button **visibility**. Hidden buttons cannot be clicked.
 | `food_gt` | `value` | Player's hunger level > value |
 | `food_lt` | `value` | Player's hunger level < value |
 
-### Toggle buttons
+---
+
+## Toggle buttons
 
 A toggle button shows different item/name/lore/actions depending on a scoreboard tag on the player. Replace the `item` and `actions` fields with a `toggle` object.
 
@@ -173,221 +179,51 @@ A toggle button shows different item/name/lore/actions depending on a scoreboard
 | `name_on` / `name_off` | string | `§aEnabled` / `§7Disabled` | Display name in each state. |
 | `lore_on` / `lore_off` | string[] | `[]` | Lore in each state. |
 | `glint_on` / `glint_off` | boolean | `false` | Glint in each state. |
-| `actions_on` | action[] | `[tag @s remove <tag>]` | Actions executed when clicking while ON (turning OFF). Default removes the tag. |
-| `actions_off` | action[] | `[tag @s add <tag>]` | Actions executed when clicking while OFF (turning ON). Default adds the tag. |
+| `actions_on` | action[] | `[tag @s remove <tag>]` | Actions executed on click while ON (turning OFF). |
+| `actions_off` | action[] | `[tag @s add <tag>]` | Actions executed on click while OFF (turning ON). |
 
-The tag is flipped via Java API before `actions_on`/`actions_off` run, so there is no race condition. Custom actions are executed in order after the flip — use them for sounds, messages, or side-effect commands. The GUI always reopens automatically to show the new state unless an action in the chain closes or navigates away.
+Toggle actions also fully support the multi-action engine (separated by `;` in the visual editor).
+
+---
+
+## Client-Side features (Optional)
+
+Installing this mod on the client-side unlocks powerful, highly-polished user experience features:
+
+### 1. In-Game GUI Editor
+* Open the **Mod Menu** config screen to see a list of loaded GUIs.
+* Click any GUI to open the **GUI Editor Screen**!
+* Visually edit GUI `title`, `rows`, `tick_rate`, `close_on_move`, and background `filler`.
+* Manage buttons list, add new buttons, and edit slot, item, amount, glint, lore (using `;` split), multiple actions, and toggle properties.
+* Click **Apply & Back** to open the **Gui Save Loading Screen** which finds the target datapack folder on the server, safely writes the JSON to disk, and reloads the API definitions. No edits are ever lost on rejoin!
+
+### 2. Native Keybindings
+Integrates natively with Minecraft's official controls menu (**Options > Controls > Key Binds > GUI API**):
+* **Accept Rules (Open GUI):** Opens the default welcome GUI (Defaults to **`G`**).
+* **Toggle Search in GUI:** Activates the interactive slot search (Defaults to **`L`**).
+
+### 3. Interactive Slot Search (`L`)
+* Press **`L`** inside any GUI (or any chest/barrel container enventories!) to toggle the Search bar.
+* Type alphanumeric characters to search. Matching items are highlighted with a gorgeous HSB glowing neon color-cycling gradient, while non-matching slots are dimmed.
+* Minecraft closing/dropping hotkeys (like `E` and `Q`) are safely blocked while search is focused to ensure a pristine typing experience. Press `ESC` or `L` again to close.
 
 ---
 
 ## Examples
 
-### Minimal button
-
-```json
-{
-  "title": "§6My GUI",
-  "rows": 3,
-  "buttons": [
-    {
-      "slot": 13,
-      "item": "minecraft:diamond",
-      "name": "§bClick Me",
-      "lore": ["§7Does something useful."],
-      "actions": [
-        { "type": "run_command", "value": "say hello" },
-        { "type": "close" }
-      ]
-    }
-  ]
-}
-```
-
-### Placeholder in name and lore
-
-```json
-{
-  "slot": 4,
-  "item": "minecraft:player_head",
-  "name": "§6{player}",
-  "lore": [
-    "§7Page {page1}/{pages}",
-    "§7Coins: §e{score:coins}"
-  ]
-}
-```
-
-### Runtime variables
-
-Variables are per-player, in-memory, and cleared when the GUI closes.
-
-```json
-{
-  "title": "§6Counter: {var:count}",
-  "rows": 1,
-  "on_open": [
-    { "type": "set_var", "var": "count", "value": "0" }
-  ],
-  "buttons": [
-    {
-      "slot": 3,
-      "item": "minecraft:lime_dye",
-      "name": "§a+1",
-      "lore": ["§7Count: §f{var:count}"],
-      "actions": [
-        { "type": "add_var", "var": "count", "value": "1" },
-        { "type": "open_gui", "value": "example:counter" }
-      ]
-    },
-    {
-      "slot": 4,
-      "item": "minecraft:red_dye",
-      "name": "§c-1",
-      "lore": ["§7Count: §f{var:count}"],
-      "condition": { "type": "var_gt", "value": "count:0" },
-      "actions": [
-        { "type": "sub_var", "var": "count", "value": "1" },
-        { "type": "open_gui", "value": "example:counter" }
-      ]
-    },
-    {
-      "slot": 5,
-      "item": "minecraft:barrier",
-      "name": "§7Reset",
-      "actions": [
-        { "type": "reset_var", "var": "count" },
-        { "type": "open_gui", "value": "example:counter" }
-      ]
-    }
-  ]
-}
-```
-
-> Variables survive page navigation within the same GUI but are cleared on close. Use `on_open` to initialize them to a known value.
-
-### on_open and on_close hooks
-
-```json
-{
-  "title": "§aShop",
-  "rows": 3,
-  "on_open":  [{ "type": "run_command", "value": "tag @s add in_shop", "run_with": "console" }],
-  "on_close": [{ "type": "run_command", "value": "tag @s remove in_shop", "run_with": "console" }],
-  "buttons": []
-}
-```
-
-### Toggle button
-
-```json
-{
-  "slot": 4,
-  "toggle": {
-    "tag": "notifications_on",
-    "item_on":   "minecraft:bell",
-    "item_off":  "minecraft:barrier",
-    "name_on":   "§aNotifications: ON",
-    "name_off":  "§cNotifications: OFF",
-    "lore_on":   ["§7Click to disable.", "§8Player: {player}"],
-    "lore_off":  ["§7Click to enable.",  "§8Player: {player}"],
-    "actions_on": [
-      { "type": "sound",   "value": "minecraft:block.lever.click:1.0:0.8" },
-      { "type": "message", "value": "§7Notifications disabled, {player}." }
-    ],
-    "actions_off": [
-      { "type": "sound",   "value": "minecraft:block.lever.click:1.0:1.2" },
-      { "type": "message", "value": "§aNotifications enabled, {player}!" }
-    ]
-  }
-}
-```
-
-### Left-click vs right-click on the same slot
-
-```json
-{
-  "slot": 13, "item": "minecraft:paper", "name": "§fInteract",
-  "click_type": "left",
-  "actions": [{ "type": "message", "value": "§aLeft!" }]
-},
-{
-  "slot": 13, "item": "minecraft:paper", "name": "§fInteract",
-  "click_type": "right",
-  "actions": [{ "type": "message", "value": "§eRight!" }]
-}
-```
-
-> Two buttons can share a slot with different `click_type` values. The first matching one wins.
-
-### Conditional button (tag-gated)
-
-```json
-{
-  "slot": 4,
-  "item": "minecraft:nether_star",
-  "name": "§6Admin Only",
-  "condition": { "type": "has_tag", "value": "admin" },
-  "actions": [{ "type": "open_gui", "value": "example:admin_panel" }]
-}
-```
-
-### Console command
-
-```json
-{
-  "slot": 8,
-  "item": "minecraft:command_block",
-  "name": "§cGive OP Items",
-  "condition": { "type": "has_tag", "value": "admin" },
-  "actions": [
-    { "type": "run_command", "value": "give @s minecraft:netherite_sword", "run_with": "console" },
-    { "type": "close" }
-  ]
-}
-```
+Please refer to the updated `example-datapack` directory in the repository sources for highly-polished, fully-annotated examples demonstrating auto-refreshing clocks, direct scoreboard trading, status effect controllers, and custom visual models!
 
 ---
 
 ## Building
 
 ```bash
+chmod +x gradlew
 ./gradlew build
-# Output: build/libs/guiapi-1.0.3.jar
+# Output: build/libs/guiapi-1.0.4.jar
 ```
 
 Requires **Java 21**.
-
----
-
-## Architecture
-
-```
-src/main/java/dev/toolkitmc/guiapi/
- ├── GuiApiMod.java                   ModInitializer — registers reload listener and command
- ├── command/
- │   └── GuiCommand.java              /guiapi open|list|reload|help  (bare /guiapi → help)
- ├── gui/
- │   ├── GuiDefinition.java           JSON model: title, rows, buttons, toggle, on_open/close
- │   ├── GuiScreenHandler.java        Extends GenericContainerScreenHandler; blocks interaction
- │   └── BarrelGuiHandler.java        Opens screens; evaluates conditions; resolves placeholders;
- │                                    dispatches actions; fires on_open/on_close hooks
- ├── loader/
- │   └── GuiRegistry.java             Loads data/<ns>/gui/*.json on resource reload
- └── modmenu/
-     └── GuiApiModMenuEntry.java      Optional Mod Menu info screen
-```
-
----
-
-## Security
-
-See [SECURITY.md](SECURITY.md).
-
----
-
-## Contributing
-
-See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ---
 

@@ -46,10 +46,10 @@ public abstract class HandledScreenMixin extends Screen {
                     ItemStack stack = slot.getStack();
                     if (stack.isEmpty()) continue;
 
+                    // Match against both item display name and technical item ID safely
                     boolean isMatch = searchQuery.isEmpty() ||
                             stack.getName().getString().toLowerCase().contains(searchQuery.toLowerCase()) ||
-                            stack.getTooltip(net.minecraft.item.Item.TooltipContext.DEFAULT, client.player, net.minecraft.item.tooltip.TooltipType.BASIC)
-                                    .stream().anyMatch(t -> t.getString().toLowerCase().contains(searchQuery.toLowerCase()));
+                            net.minecraft.registry.Registries.ITEM.getId(stack.getItem()).toString().toLowerCase().contains(searchQuery.toLowerCase());
 
                     int slotX = this.x + slot.x;
                     int slotY = this.y + slot.y;
@@ -82,23 +82,28 @@ public abstract class HandledScreenMixin extends Screen {
                     if (!searchQuery.isEmpty()) {
                         searchQuery = searchQuery.substring(0, searchQuery.length() - 1);
                     }
+                    cir.setReturnValue(true);
                 } else if (keyCode == 256) { // GLFW_KEY_ESCAPE = 256
                     isSearchActive = false;
                     searchQuery = "";
-                } else if (keyCode == 32) { // Space (GLFW_KEY_SPACE = 32)
-                    searchQuery += " ";
-                } else if (keyCode >= 65 && keyCode <= 90) { // A-Z (GLFW_KEY_A to GLFW_KEY_Z)
-                    char c = (char) keyCode;
-                    if ((modifiers & 1) == 0) { // Shift NOT pressed
-                        c = Character.toLowerCase(c);
-                    }
-                    searchQuery += c;
-                } else if (keyCode >= 48 && keyCode <= 57) { // 0-9 (GLFW_KEY_0 to GLFW_KEY_9)
-                    char c = (char) (keyCode - 48 + '0');
-                    searchQuery += c;
+                    cir.setReturnValue(true);
+                } else {
+                    // Consume any other keypresses to block vanilla enventories/hotkeys (like close inventory on E or drop item on Q)
+                    cir.setReturnValue(true);
                 }
-                
-                // ALWAYS consume keypresses when search is active to block vanilla inventory closing (E) or item dropping (Q)
+            }
+        }
+    }
+
+    @Inject(method = "charTyped", at = @At("HEAD"), cancellable = true)
+    private void charTypedInject(char chr, int modifiers, CallbackInfoReturnable<Boolean> cir) {
+        HandledScreen<?> screen = (HandledScreen<?>)(Object)this;
+        if (screen.getScreenHandler() instanceof GenericContainerScreenHandler) {
+            if (isSearchActive) {
+                // Only append printable character inputs safely, respecting keyboard layouts
+                if (chr >= 32) {
+                    searchQuery += chr;
+                }
                 cir.setReturnValue(true);
             }
         }
