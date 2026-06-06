@@ -24,13 +24,13 @@
     "main": [
       "dev.toolkitmc.guiapi.GuiApiMod"
     ],
-    "client": [
-      "dev.toolkitmc.guiapi.client.GuiApiClient"
-    ],
     "modmenu": [
       "dev.toolkitmc.guiapi.modmenu.GuiApiModMenuEntry"
     ]
   },
+  "mixins": [
+    "guiapi.mixins.json"
+  ],
   "depends": {
     "fabricloader": ">=${loader_version}",
     "fabric-api": "*",
