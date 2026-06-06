@@ -9,6 +9,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(Keyboard.class)
 public class KeyboardMixin {
+    
     @Inject(method = "onKey", at = @At("HEAD"))
     private void onKeyInject(long window, int key, int scancode, int action, int modifiers, CallbackInfo ci) {
         MinecraftClient client = MinecraftClient.getInstance();
@@ -17,6 +18,18 @@ public class KeyboardMixin {
             if (dev.toolkitmc.guiapi.client.GuiApiClient.openMenuKey.matchesKey(key, scancode)) {
                 client.player.networkHandler.sendChatCommand("guiapi open example:welcome");
             }
+        }
+    }
+
+    @Inject(method = "onChar", at = @At("HEAD"), cancellable = true)
+    private void onCharInject(long window, int codePoint, int modifiers, CallbackInfo ci) {
+        char chr = (char) codePoint;
+        // If search is active in any chest/container screen, capture and consume typed characters safely
+        if (HandledScreenMixin.isSearchActive) {
+            if (chr >= 32) {
+                HandledScreenMixin.searchQuery += chr;
+            }
+            ci.cancel(); // Consume character to prevent other vanilla key bindings
         }
     }
 }
