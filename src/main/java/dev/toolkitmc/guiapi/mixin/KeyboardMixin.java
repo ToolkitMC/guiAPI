@@ -25,9 +25,9 @@ public class KeyboardMixin {
     private void onCharInject(long window, int codePoint, int modifiers, CallbackInfo ci) {
         char chr = (char) codePoint;
         // If search is active in any chest/container screen, capture and consume typed characters safely
-        if (HandledScreenMixin.isSearchActive) {
+        if (dev.toolkitmc.guiapi.client.GuiApiClient.isSearchActive) {
             if (chr >= 32) {
-                HandledScreenMixin.searchQuery += chr;
+                dev.toolkitmc.guiapi.client.GuiApiClient.searchQuery += chr;
             }
             ci.cancel(); // Consume character to prevent other vanilla key bindings
         }
