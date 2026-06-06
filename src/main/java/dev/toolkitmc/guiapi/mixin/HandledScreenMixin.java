@@ -68,8 +68,8 @@ public abstract class HandledScreenMixin extends Screen {
     private void keyPressedInject(int keyCode, int scanCode, int modifiers, CallbackInfoReturnable<Boolean> cir) {
         HandledScreen<?> screen = (HandledScreen<?>)(Object)this;
         if (screen.getScreenHandler() instanceof GenericContainerScreenHandler) {
-            // Ctrl + F
-            if (keyCode == 70 && (modifiers & 2) != 0) { // GLFW_KEY_F = 70, GLFW_MOD_CONTROL = 2
+            // Ctrl + F toggles search (GLFW_KEY_F = 70, GLFW_MOD_CONTROL = 2)
+            if (keyCode == 70 && (modifiers & 2) != 0) {
                 isSearchActive = !isSearchActive;
                 if (!isSearchActive) searchQuery = "";
                 cir.setReturnValue(true);
@@ -81,26 +81,24 @@ public abstract class HandledScreenMixin extends Screen {
                     if (!searchQuery.isEmpty()) {
                         searchQuery = searchQuery.substring(0, searchQuery.length() - 1);
                     }
-                    cir.setReturnValue(true);
                 } else if (keyCode == 256) { // GLFW_KEY_ESCAPE = 256
                     isSearchActive = false;
                     searchQuery = "";
-                    cir.setReturnValue(true);
-                } else if (keyCode == 32) { // Space
+                } else if (keyCode == 32) { // Space (GLFW_KEY_SPACE = 32)
                     searchQuery += " ";
-                    cir.setReturnValue(true);
-                } else if (keyCode >= 65 && keyCode <= 90) { // A-Z
+                } else if (keyCode >= 65 && keyCode <= 90) { // A-Z (GLFW_KEY_A to GLFW_KEY_Z)
                     char c = (char) keyCode;
-                    if ((modifiers & 1) == 0) {
+                    if ((modifiers & 1) == 0) { // Shift NOT pressed
                         c = Character.toLowerCase(c);
                     }
                     searchQuery += c;
-                    cir.setReturnValue(true);
-                } else if (keyCode >= 48 && keyCode <= 57) { // 0-9
+                } else if (keyCode >= 48 && keyCode <= 57) { // 0-9 (GLFW_KEY_0 to GLFW_KEY_9)
                     char c = (char) (keyCode - 48 + '0');
                     searchQuery += c;
-                    cir.setReturnValue(true);
                 }
+                
+                // ALWAYS consume keypresses when search is active to block vanilla inventory closing (E) or item dropping (Q)
+                cir.setReturnValue(true);
             }
         }
     }
