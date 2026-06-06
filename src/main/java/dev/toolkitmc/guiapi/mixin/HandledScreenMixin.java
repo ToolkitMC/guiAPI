@@ -9,7 +9,6 @@ import net.minecraft.item.ItemStack;
 import net.minecraft.text.Text;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
-import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
@@ -21,9 +20,6 @@ public abstract class HandledScreenMixin extends Screen {
     @Shadow protected int x;
     @Shadow protected int y;
 
-    @Unique public static boolean isSearchActive = false;
-    @Unique public static String searchQuery = "";
-
     protected HandledScreenMixin(Text title) {
         super(title);
     }
@@ -32,14 +28,14 @@ public abstract class HandledScreenMixin extends Screen {
     private void renderInject(DrawContext ctx, int mouseX, int mouseY, float delta, CallbackInfo ci) {
         HandledScreen<?> screen = (HandledScreen<?>)(Object)this;
         if (screen.getScreenHandler() instanceof GenericContainerScreenHandler) {
-            if (isSearchActive) {
+            if (dev.toolkitmc.guiapi.client.GuiApiClient.isSearchActive) {
                 long time = System.currentTimeMillis();
                 int rainbowColor = java.awt.Color.HSBtoRGB((time % 2000) / 2000f, 0.8f, 0.8f);
 
                 // Draw glowing search bar
                 ctx.fill(10, 10, 180, 26, 0x99000000);
                 ctx.fill(10, 25, 180, 26, rainbowColor);
-                ctx.drawTextWithShadow(textRenderer, "Search: " + searchQuery + "|", 15, 14, 0xFFFFFF);
+                ctx.drawTextWithShadow(textRenderer, "Search: " + dev.toolkitmc.guiapi.client.GuiApiClient.searchQuery + "|", 15, 14, 0xFFFFFF);
 
                 // Highlight slot matches
                 for (Slot slot : screen.getScreenHandler().slots) {
@@ -47,16 +43,16 @@ public abstract class HandledScreenMixin extends Screen {
                     if (stack.isEmpty()) continue;
 
                     // Match against both item display name and technical item ID safely
-                    boolean isMatch = searchQuery.isEmpty() ||
-                            stack.getName().getString().toLowerCase().contains(searchQuery.toLowerCase()) ||
-                            net.minecraft.registry.Registries.ITEM.getId(stack.getItem()).toString().toLowerCase().contains(searchQuery.toLowerCase());
+                    boolean isMatch = dev.toolkitmc.guiapi.client.GuiApiClient.searchQuery.isEmpty() ||
+                            stack.getName().getString().toLowerCase().contains(dev.toolkitmc.guiapi.client.GuiApiClient.searchQuery.toLowerCase()) ||
+                            net.minecraft.registry.Registries.ITEM.getId(stack.getItem()).toString().toLowerCase().contains(dev.toolkitmc.guiapi.client.GuiApiClient.searchQuery.toLowerCase());
 
                     int slotX = this.x + slot.x;
                     int slotY = this.y + slot.y;
 
-                    if (isMatch && !searchQuery.isEmpty()) {
+                    if (isMatch && !dev.toolkitmc.guiapi.client.GuiApiClient.searchQuery.isEmpty()) {
                         ctx.fill(slotX, slotY, slotX + 16, slotY + 16, 0x4400FF00);
-                    } else if (!searchQuery.isEmpty()) {
+                    } else if (!dev.toolkitmc.guiapi.client.GuiApiClient.searchQuery.isEmpty()) {
                         ctx.fill(slotX, slotY, slotX + 16, slotY + 16, 0xBB000000);
                     }
                 }
@@ -71,21 +67,21 @@ public abstract class HandledScreenMixin extends Screen {
             
             // Check if the pressed key matches our official client search keybinding (Defaults to L!)
             if (dev.toolkitmc.guiapi.client.GuiApiClient.toggleSearchKey.matchesKey(keyCode, scanCode)) {
-                isSearchActive = !isSearchActive;
-                if (!isSearchActive) searchQuery = "";
+                dev.toolkitmc.guiapi.client.GuiApiClient.isSearchActive = !dev.toolkitmc.guiapi.client.GuiApiClient.isSearchActive;
+                if (!dev.toolkitmc.guiapi.client.GuiApiClient.isSearchActive) dev.toolkitmc.guiapi.client.GuiApiClient.searchQuery = "";
                 cir.setReturnValue(true);
                 return;
             }
 
-            if (isSearchActive) {
+            if (dev.toolkitmc.guiapi.client.GuiApiClient.isSearchActive) {
                 if (keyCode == 259) { // GLFW_KEY_BACKSPACE = 259
-                    if (!searchQuery.isEmpty()) {
-                        searchQuery = searchQuery.substring(0, searchQuery.length() - 1);
+                    if (!dev.toolkitmc.guiapi.client.GuiApiClient.searchQuery.isEmpty()) {
+                        dev.toolkitmc.guiapi.client.GuiApiClient.searchQuery = dev.toolkitmc.guiapi.client.GuiApiClient.searchQuery.substring(0, dev.toolkitmc.guiapi.client.GuiApiClient.searchQuery.length() - 1);
                     }
                     cir.setReturnValue(true);
                 } else if (keyCode == 256) { // GLFW_KEY_ESCAPE = 256
-                    isSearchActive = false;
-                    searchQuery = "";
+                    dev.toolkitmc.guiapi.client.GuiApiClient.isSearchActive = false;
+                    dev.toolkitmc.guiapi.client.GuiApiClient.searchQuery = "";
                     cir.setReturnValue(true);
                 } else {
                     // Consume any other keypresses to block vanilla enventories/hotkeys (like close inventory on E or drop item on Q)
