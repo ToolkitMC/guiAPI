@@ -21,8 +21,8 @@ public abstract class HandledScreenMixin extends Screen {
     @Shadow protected int x;
     @Shadow protected int y;
 
-    @Unique private static boolean isSearchActive = false;
-    @Unique private static String searchQuery = "";
+    @Unique private boolean isSearchActive = false;
+    @Unique private String searchQuery = "";
 
     protected HandledScreenMixin(Text title) {
         super(title);
@@ -31,76 +31,70 @@ public abstract class HandledScreenMixin extends Screen {
     @Inject(method = "render", at = @At("TAIL"))
     private void renderInject(DrawContext ctx, int mouseX, int mouseY, float delta, CallbackInfo ci) {
         HandledScreen<?> screen = (HandledScreen<?>)(Object)this;
-        if (screen.getScreenHandler() instanceof GenericContainerScreenHandler) {
-            if (isSearchActive) {
-                long time = System.currentTimeMillis();
-                int rainbowColor = java.awt.Color.HSBtoRGB((time % 2000) / 2000f, 0.8f, 0.8f);
+        if (!(screen.getScreenHandler() instanceof GenericContainerScreenHandler)) return;
+        if (!isSearchActive) return;
 
-                // Draw glowing search bar
-                ctx.fill(10, 10, 180, 26, 0x99000000);
-                ctx.fill(10, 25, 180, 26, rainbowColor);
-                ctx.drawTextWithShadow(textRenderer, "Search: " + searchQuery + "|", 15, 14, 0xFFFFFF);
+        long time = System.currentTimeMillis();
+        int rainbowColor = java.awt.Color.HSBtoRGB((time % 2000) / 2000f, 0.8f, 0.8f);
 
-                // Highlight slot matches
-                for (Slot slot : screen.getScreenHandler().slots) {
-                    ItemStack stack = slot.getStack();
-                    if (stack.isEmpty()) continue;
+        ctx.drawTextWithShadow(textRenderer, "Search: " + searchQuery + "|", 15, 14, rainbowColor);
 
-                    boolean isMatch = searchQuery.isEmpty() ||
-                            stack.getName().getString().toLowerCase().contains(searchQuery.toLowerCase()) ||
-                            stack.getTooltip(net.minecraft.item.Item.TooltipContext.DEFAULT, client.player, net.minecraft.item.tooltip.TooltipType.BASIC)
-                                    .stream().anyMatch(t -> t.getString().toLowerCase().contains(searchQuery.toLowerCase()));
+        for (Slot slot : screen.getScreenHandler().slots) {
+            ItemStack stack = slot.getStack();
+            if (stack.isEmpty()) continue;
 
-                    int slotX = this.x + slot.x;
-                    int slotY = this.y + slot.y;
+            boolean isMatch = searchQuery.isEmpty() ||
+                    stack.getName().getString().toLowerCase().contains(searchQuery.toLowerCase()) ||
+                    stack.getTooltip(
+                            net.minecraft.item.Item.TooltipContext.DEFAULT,
+                            client.player,
+                            net.minecraft.item.tooltip.TooltipType.BASIC
+                    ).stream().anyMatch(t -> t.getString().toLowerCase().contains(searchQuery.toLowerCase()));
 
-                    if (isMatch && !searchQuery.isEmpty()) {
-                        ctx.fill(slotX, slotY, slotX + 16, slotY + 16, 0x4400FF00);
-                    } else if (!searchQuery.isEmpty()) {
-                        ctx.fill(slotX, slotY, slotX + 16, slotY + 16, 0xBB000000);
-                    }
-                }
+            int slotX = this.x + slot.x;
+            int slotY = this.y + slot.y;
+
+            if (!searchQuery.isEmpty()) {
+                ctx.fill(slotX, slotY, slotX + 16, slotY + 16, isMatch ? 0x4400FF00 : 0xBB000000);
             }
         }
+    }
+
+    @Inject(method = "charTyped", at = @At("HEAD"), cancellable = true)
+    private void charTypedInject(char chr, int modifiers, CallbackInfoReturnable<Boolean> cir) {
+        HandledScreen<?> screen = (HandledScreen<?>)(Object)this;
+        if (!(screen.getScreenHandler() instanceof GenericContainerScreenHandler)) return;
+        if (!isSearchActive) return;
+
+        searchQuery += chr;
+        cir.setReturnValue(true);
     }
 
     @Inject(method = "keyPressed", at = @At("HEAD"), cancellable = true)
     private void keyPressedInject(int keyCode, int scanCode, int modifiers, CallbackInfoReturnable<Boolean> cir) {
         HandledScreen<?> screen = (HandledScreen<?>)(Object)this;
-        if (screen.getScreenHandler() instanceof GenericContainerScreenHandler) {
-            int configuredSearchKey = dev.toolkitmc.guiapi.config.GuiApiConfig.INSTANCE.getToggleSearchKey();
-            // Ctrl + Configured Search Key toggles search
-            if (keyCode == configuredSearchKey && (modifiers & 2) != 0) {
-                isSearchActive = !isSearchActive;
-                if (!isSearchActive) searchQuery = "";
-                cir.setReturnValue(true);
-                return;
-            }
+        if (!(screen.getScreenHandler() instanceof GenericContainerScreenHandler)) return;
 
-            if (isSearchActive) {
-                if (keyCode == 259) { // GLFW_KEY_BACKSPACE = 259
-                    if (!searchQuery.isEmpty()) {
-                        searchQuery = searchQuery.substring(0, searchQuery.length() - 1);
-                    }
-                } else if (keyCode == 256) { // GLFW_KEY_ESCAPE = 256
-                    isSearchActive = false;
-                    searchQuery = "";
-                } else if (keyCode == 32) { // Space (GLFW_KEY_SPACE = 32)
-                    searchQuery += " ";
-                } else if (keyCode >= 65 && keyCode <= 90) { // A-Z (GLFW_KEY_A to GLFW_KEY_Z)
-                    char c = (char) keyCode;
-                    if ((modifiers & 1) == 0) { // Shift NOT pressed
-                        c = Character.toLowerCase(c);
-                    }
-                    searchQuery += c;
-                } else if (keyCode >= 48 && keyCode <= 57) { // 0-9 (GLFW_KEY_0 to GLFW_KEY_9)
-                    char c = (char) (keyCode - 48 + '0');
-                    searchQuery += c;
-                }
-                
-                // ALWAYS consume keypresses when search is active to block vanilla inventory closing (E) or item dropping (Q)
-                cir.setReturnValue(true);
-            }
+        int configuredSearchKey = dev.toolkitmc.guiapi.config.GuiApiConfig.INSTANCE.getToggleSearchKey();
+
+        if (keyCode == configuredSearchKey && (modifiers & 2) != 0) {
+            isSearchActive = !isSearchActive;
+            if (!isSearchActive) searchQuery = "";
+            cir.setReturnValue(true);
+            return;
         }
+
+        if (!isSearchActive) return;
+
+        if (keyCode == 259) { // BACKSPACE
+            if (!searchQuery.isEmpty()) {
+                searchQuery = searchQuery.substring(0, searchQuery.length() - 1);
+            }
+        } else if (keyCode == 256) { // ESCAPE
+            isSearchActive = false;
+            searchQuery = "";
+        }
+
+        cir.setReturnValue(true);
     }
 }
