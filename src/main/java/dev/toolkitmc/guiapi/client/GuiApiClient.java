@@ -10,6 +10,10 @@ public class GuiApiClient implements ClientModInitializer {
     public static KeyBinding openMenuKey;
     public static KeyBinding toggleSearchKey;
 
+    // Move search state to this normal Java class to bypass Mixin static field constraints!
+    public static boolean isSearchActive = false;
+    public static String searchQuery = "";
+
     @Override
     public void onInitializeClient() {
         // Register Open Menu Key (Defaults to G)
@@ -24,7 +28,7 @@ public class GuiApiClient implements ClientModInitializer {
         toggleSearchKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
                 "key.guiapi.toggle_search",
                 InputUtil.Type.KEYSYM,
-                InputUtil.GLFW_KEY_L, // Default Key L (GLFW keycode 76)
+                InputUtil.GLFW_KEY_L, // Default Key L
                 "category.guiapi.general"
         ));
     }
