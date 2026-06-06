@@ -21,8 +21,8 @@ public abstract class HandledScreenMixin extends Screen {
     @Shadow protected int x;
     @Shadow protected int y;
 
-    @Unique private static boolean isSearchActive = false;
-    @Unique private static String searchQuery = "";
+    @Unique public static boolean isSearchActive = false;
+    @Unique public static String searchQuery = "";
 
     protected HandledScreenMixin(Text title) {
         super(title);
@@ -91,20 +91,6 @@ public abstract class HandledScreenMixin extends Screen {
                     // Consume any other keypresses to block vanilla enventories/hotkeys (like close inventory on E or drop item on Q)
                     cir.setReturnValue(true);
                 }
-            }
-        }
-    }
-
-    @Inject(method = "charTyped", at = @At("HEAD"), cancellable = true)
-    private void charTypedInject(char chr, int modifiers, CallbackInfoReturnable<Boolean> cir) {
-        HandledScreen<?> screen = (HandledScreen<?>)(Object)this;
-        if (screen.getScreenHandler() instanceof GenericContainerScreenHandler) {
-            if (isSearchActive) {
-                // Only append printable character inputs safely, respecting keyboard layouts
-                if (chr >= 32) {
-                    searchQuery += chr;
-                }
-                cir.setReturnValue(true);
             }
         }
     }

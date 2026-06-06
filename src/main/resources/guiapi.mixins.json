@@ -6,7 +6,8 @@
   ],
   "client": [
     "HandledScreenMixin",
-    "KeyboardMixin"
+    "KeyboardMixin",
+    "ScreenMixin"
   ],
   "injectors": {
     "defaultRequire": 1
