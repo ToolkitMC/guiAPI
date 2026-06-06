@@ -1,6 +1,5 @@
 package dev.toolkitmc.guiapi.client;
 
-import dev.toolkitmc.guiapi.gui.GuiScreenHandler;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
@@ -9,6 +8,7 @@ import net.fabricmc.fabric.api.client.screen.v1.ScreenKeyboardEvents;
 import net.minecraft.client.option.KeyBinding;
 import net.minecraft.client.util.InputUtil;
 import net.minecraft.client.gui.screen.ingame.HandledScreen;
+import net.minecraft.screen.GenericContainerScreenHandler;
 import net.minecraft.screen.slot.Slot;
 import net.minecraft.item.ItemStack;
 import net.minecraft.text.Text;
@@ -44,8 +44,8 @@ public class GuiApiClient implements ClientModInitializer {
         // Client Feature 2 & 3: Interactive Slot Search Overlay & Tooltip Styling
         ScreenEvents.AFTER_INIT.register((client, screen, scaledWidth, scaledHeight) -> {
             if (screen instanceof HandledScreen<?> handledScreen) {
-                // If it is our custom chest GUI
-                if (handledScreen.getScreenHandler() instanceof GuiScreenHandler) {
+                // If it is a container GUI (such as chests, barrels, or our custom GUI API menus)
+                if (handledScreen.getScreenHandler() instanceof GenericContainerScreenHandler) {
                     
                     // Register keypress listener
                     ScreenKeyboardEvents.allowKeyPress(screen).register((screen1, key, scancode, modifiers) -> {
