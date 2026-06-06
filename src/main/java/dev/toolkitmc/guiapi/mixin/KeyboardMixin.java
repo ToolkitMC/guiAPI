@@ -9,19 +9,14 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(Keyboard.class)
 public class KeyboardMixin {
-
     @Inject(method = "onKey", at = @At("HEAD"))
     private void onKeyInject(long window, int key, int scancode, int action, int modifiers, CallbackInfo ci) {
-        if (action != 1) return;
-
         MinecraftClient client = MinecraftClient.getInstance();
-        if (client.player == null || client.currentScreen != null) return;
-
-        int configuredKey = dev.toolkitmc.guiapi.config.GuiApiConfig.INSTANCE.getOpenGuiKey();
-        if (key == configuredKey) {
-            client.execute(() -> client.setScreen(
-                dev.toolkitmc.guiapi.screen.GuiApiScreen.create(client)
-            ));
+        if (client.player != null && client.currentScreen == null && action == 1) {
+            // Check if the pressed key matches our official open menu keybinding (Defaults to G!)
+            if (dev.toolkitmc.guiapi.client.GuiApiClient.openMenuKey.matchesKey(key, scancode)) {
+                client.player.networkHandler.sendChatCommand("guiapi open example:welcome");
+            }
         }
     }
 }
