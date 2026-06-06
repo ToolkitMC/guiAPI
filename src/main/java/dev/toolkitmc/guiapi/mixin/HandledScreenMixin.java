@@ -68,8 +68,9 @@ public abstract class HandledScreenMixin extends Screen {
     private void keyPressedInject(int keyCode, int scanCode, int modifiers, CallbackInfoReturnable<Boolean> cir) {
         HandledScreen<?> screen = (HandledScreen<?>)(Object)this;
         if (screen.getScreenHandler() instanceof GenericContainerScreenHandler) {
-            // Ctrl + F toggles search (GLFW_KEY_F = 70, GLFW_MOD_CONTROL = 2)
-            if (keyCode == 70 && (modifiers & 2) != 0) {
+            int configuredSearchKey = dev.toolkitmc.guiapi.config.GuiApiConfig.INSTANCE.getToggleSearchKey();
+            // Ctrl + Configured Search Key toggles search
+            if (keyCode == configuredSearchKey && (modifiers & 2) != 0) {
                 isSearchActive = !isSearchActive;
                 if (!isSearchActive) searchQuery = "";
                 cir.setReturnValue(true);
