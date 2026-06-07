@@ -20,16 +20,4 @@ public class KeyboardMixin {
             }
         }
     }
-
-    @Inject(method = "onChar", at = @At("HEAD"), cancellable = true)
-    private void onCharInject(long window, int codePoint, int modifiers, CallbackInfo ci) {
-        char chr = (char) codePoint;
-        // If search is active in any chest/container screen, capture and consume typed characters safely
-        if (dev.toolkitmc.guiapi.client.GuiApiClient.isSearchActive) {
-            if (chr >= 32) {
-                dev.toolkitmc.guiapi.client.GuiApiClient.searchQuery += chr;
-            }
-            ci.cancel(); // Consume character to prevent other vanilla key bindings
-        }
-    }
 }

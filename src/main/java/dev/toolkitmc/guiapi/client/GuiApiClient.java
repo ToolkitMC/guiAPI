@@ -8,11 +8,6 @@ import net.minecraft.client.util.InputUtil;
 public class GuiApiClient implements ClientModInitializer {
 
     public static KeyBinding openMenuKey;
-    public static KeyBinding toggleSearchKey;
-
-    // Move search state to this normal Java class to bypass Mixin static field constraints!
-    public static boolean isSearchActive = false;
-    public static String searchQuery = "";
 
     @Override
     public void onInitializeClient() {
@@ -21,14 +16,6 @@ public class GuiApiClient implements ClientModInitializer {
                 "key.guiapi.open_menu",
                 InputUtil.Type.KEYSYM,
                 InputUtil.GLFW_KEY_G,
-                "category.guiapi.general"
-        ));
-
-        // Register Toggle Search Key (Defaults to L, as requested!)
-        toggleSearchKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
-                "key.guiapi.toggle_search",
-                InputUtil.Type.KEYSYM,
-                InputUtil.GLFW_KEY_L, // Default Key L
                 "category.guiapi.general"
         ));
     }
