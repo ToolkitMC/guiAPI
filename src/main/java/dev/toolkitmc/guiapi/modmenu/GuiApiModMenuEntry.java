@@ -1083,6 +1083,10 @@ public class GuiApiModMenuEntry implements ModMenuApi {
             this.amount = parsedAmount;
         }
 
+        public void updateToggle(Optional<GuiDefinition.ToggleDefinition> newToggle) {
+            this.toggle = newToggle;
+        }
+
         private static GuiDefinition.ClickType nextClickType(GuiDefinition.ClickType current) {
             GuiDefinition.ClickType[] vals = GuiDefinition.ClickType.values();
             return vals[(current.ordinal() + 1) % vals.length];
