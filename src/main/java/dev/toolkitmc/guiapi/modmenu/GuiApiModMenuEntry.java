@@ -40,10 +40,40 @@ public class GuiApiModMenuEntry implements ModMenuApi {
         return GuiActionParser.serializeActionsToString(actions);
     }
 
+    public static class IntegerSliderWidget extends net.minecraft.client.gui.widget.SliderWidget {
+        private final int min;
+        private final int max;
+        private final String prefix;
+        private final java.util.function.Consumer<Integer> onChange;
+
+        public IntegerSliderWidget(int x, int y, int width, int height, String prefix, int min, int max, int currentValue, java.util.function.Consumer<Integer> onChange) {
+            super(x, y, width, height, Text.literal(prefix + ": " + currentValue), (double)(currentValue - min) / (max - min));
+            this.min = min;
+            this.max = max;
+            this.prefix = prefix;
+            this.onChange = onChange;
+        }
+
+        @Override
+        protected void updateMessage() {
+            int intVal = getIntValue();
+            this.setMessage(Text.literal(prefix + ": " + intVal));
+        }
+
+        @Override
+        protected void applyValue() {
+            int intVal = getIntValue();
+            onChange.accept(intVal);
+        }
+
+        public int getIntValue() {
+            return min + (int)Math.round(this.value * (max - min));
+        }
+    }
+
     // ── Config screen ────────────────────────────────────────────────────────
 
     static class GuiApiConfigScreen extends Screen {
-
         private enum Tab {
             CONFIG, GUIS, OTHER
         }
@@ -116,10 +146,6 @@ public class GuiApiModMenuEntry implements ModMenuApi {
             this.soundVolume          = cfg.getSoundVolume();
             this.commandExecuteMode   = cfg.getCommandExecuteMode();
         }
-
-
-
-
 
         private static String nextExecuteMode(String current) {
             if ("CHAT".equalsIgnoreCase(current)) return "SYSTEM";
@@ -252,10 +278,16 @@ public class GuiApiModMenuEntry implements ModMenuApi {
                         logCommands, v -> logCommands = v);
                 y += 22;
 
-                addScrollableTickRateControls(cx, y);
-                y += 22;
+                // Default Tick Rate Slider (0, 15 etc. number slider input!)
+                IntegerSliderWidget tickRateSlider = new IntegerSliderWidget(cx - 150, y, 300, 20, "Default Tick Rate", 1, 100, defaultTickRate, val -> defaultTickRate = val);
+                addDrawableChild(tickRateSlider);
+                scrollableElements.add(new ScrollableElement(tickRateSlider, tickRateSlider, y, 20));
+                y += 24;
 
-                addScrollablePermissionControls(cx, y);
+                // Command permission level Slider
+                IntegerSliderWidget permSlider = new IntegerSliderWidget(cx - 150, y, 300, 20, "Command permission level", 0, 4, permissionLevel, val -> permissionLevel = val);
+                addDrawableChild(permSlider);
+                scrollableElements.add(new ScrollableElement(permSlider, permSlider, y, 20));
                 y += 26;
 
             } else if (currentTab == Tab.OTHER) {
@@ -290,26 +322,11 @@ public class GuiApiModMenuEntry implements ModMenuApi {
                 scrollableElements.add(new ScrollableElement(chatPrefixField, chatPrefixField, y + 12, 18));
                 y += 32;
 
-                // Input Type 2: Adjustment Buttons for Sound Volume
-                TextWidget soundVolumeLabel = new TextWidget(cx - 150, y + 4, 150, 10, Text.literal("§fSound Volume"), textRenderer);
-                TextWidget soundVolumeVal = new TextWidget(cx + 10, y + 4, 40, 10, Text.literal("§e" + soundVolume + "%"), textRenderer);
-                ButtonWidget soundMinus = ButtonWidget.builder(Text.literal("-10"), btn -> {
-                    soundVolume = Math.max(0, soundVolume - 10);
-                    soundVolumeVal.setMessage(Text.literal("§e" + soundVolume + "%"));
-                }).dimensions(cx + 50, y, 22, 18).build();
-                ButtonWidget soundPlus = ButtonWidget.builder(Text.literal("+10"), btn -> {
-                    soundVolume = Math.min(100, soundVolume + 10);
-                    soundVolumeVal.setMessage(Text.literal("§e" + soundVolume + "%"));
-                }).dimensions(cx + 74, y, 22, 18).build();
-                addDrawableChild(soundVolumeLabel);
-                addDrawableChild(soundVolumeVal);
-                addDrawableChild(soundMinus);
-                addDrawableChild(soundPlus);
-                scrollableElements.add(new ScrollableElement(soundVolumeLabel, soundVolumeLabel, y, 10));
-                scrollableElements.add(new ScrollableElement(soundVolumeVal, soundVolumeVal, y, 10));
-                scrollableElements.add(new ScrollableElement(soundMinus, soundMinus, y, 18));
-                scrollableElements.add(new ScrollableElement(soundPlus, soundPlus, y, 18));
-                y += 22;
+                // Input Type 2: Slider for Sound Volume
+                IntegerSliderWidget volumeSlider = new IntegerSliderWidget(cx - 150, y, 300, 20, "Sound Volume (%)", 0, 100, soundVolume, val -> soundVolume = val);
+                addDrawableChild(volumeSlider);
+                scrollableElements.add(new ScrollableElement(volumeSlider, volumeSlider, y, 20));
+                y += 24;
 
                 // Input Type 3: Cycle Button for Message Execute Mode
                 TextWidget execModeLabel = new TextWidget(cx - 150, y + 4, 200, 10, Text.literal("§fMessage Execute Mode"), textRenderer);
@@ -385,45 +402,6 @@ public class GuiApiModMenuEntry implements ModMenuApi {
             scrollableElements.add(new ScrollableElement(ref[0], ref[0], y, 20));
         }
 
-        private void addScrollableTickRateControls(int cx, int y) {
-            TextWidget labelWidget = new TextWidget(cx - 150, y + 4, 150, 10, Text.literal("§fDefault Tick Rate"), textRenderer);
-            TextWidget valueWidget = new TextWidget(cx + 10, y + 4, 40, 10, Text.literal("§e" + defaultTickRate), textRenderer);
-            
-            ButtonWidget minusBtn = ButtonWidget.builder(Text.literal("-5"), btn -> {
-                defaultTickRate = Math.max(0, defaultTickRate - 5);
-                valueWidget.setMessage(Text.literal("§e" + defaultTickRate));
-            }).dimensions(cx + 50, y, 20, 18).build();
-
-            ButtonWidget plusBtn = ButtonWidget.builder(Text.literal("+5"), btn -> {
-                defaultTickRate = Math.min(2400, defaultTickRate + 5);
-                valueWidget.setMessage(Text.literal("§e" + defaultTickRate));
-            }).dimensions(cx + 75, y, 20, 18).build();
-
-            addDrawableChild(labelWidget);
-            addDrawableChild(valueWidget);
-            addDrawableChild(minusBtn);
-            addDrawableChild(plusBtn);
-
-            scrollableElements.add(new ScrollableElement(labelWidget, labelWidget, y, 10));
-            scrollableElements.add(new ScrollableElement(valueWidget, valueWidget, y, 10));
-            scrollableElements.add(new ScrollableElement(minusBtn, minusBtn, y, 18));
-            scrollableElements.add(new ScrollableElement(plusBtn, plusBtn, y, 18));
-        }
-
-        private void addScrollablePermissionControls(int cx, int y) {
-            TextWidget labelWidget = new TextWidget(cx - 150, y + 4, 200, 10, Text.literal("§fCommand permission level"), textRenderer);
-            ButtonWidget btnWidget = ButtonWidget.builder(permLevelText(permissionLevel), btn -> {
-                permissionLevel = (permissionLevel + 1) % 5;
-                btn.setMessage(permLevelText(permissionLevel));
-            }).dimensions(cx + 60, y, 40, 20).build();
-
-            addDrawableChild(labelWidget);
-            addDrawableChild(btnWidget);
-
-            scrollableElements.add(new ScrollableElement(labelWidget, labelWidget, y, 10));
-            scrollableElements.add(new ScrollableElement(btnWidget, btnWidget, y, 20));
-        }
-
         private void updateScrollPositions() {
             int topBoundary = 44;
             int bottomBoundary = height - 35;
@@ -450,17 +428,14 @@ public class GuiApiModMenuEntry implements ModMenuApi {
 
         @Override
         public void render(DrawContext ctx, int mouseX, int mouseY, float delta) {
-            // 1. Temporarily hide scrollable widgets so super.render doesnt draw them without clipping
             for (ScrollableElement se : scrollableElements) {
                 if (se.drawable instanceof net.minecraft.client.gui.widget.ClickableWidget widget) {
                     widget.visible = false;
                 }
             }
 
-            // 2. Render background and fixed buttons
             super.render(ctx, mouseX, mouseY, delta);
 
-            // 3. Restore visibility states of viewport-visible elements
             int topBoundary = 44;
             int bottomBoundary = height - 35;
             for (ScrollableElement se : scrollableElements) {
@@ -471,14 +446,11 @@ public class GuiApiModMenuEntry implements ModMenuApi {
                 }
             }
 
-            // 4. Render Title
             ctx.drawCenteredTextWithShadow(textRenderer,
                     Text.literal("§6GUI API §7Settings"), width / 2, 8, 0xFFFFFF);
 
-            // 5. Draw a subtle line underneath the tab buttons
             ctx.fill(width / 2 - 150, 42, width / 2 + 150, 43, 0x44FFFFFF);
 
-            // 6. Enable Scissor & Draw Scrollable Widgets
             ctx.enableScissor(0, topBoundary, width, bottomBoundary);
             for (ScrollableElement se : scrollableElements) {
                 if (se.drawable instanceof net.minecraft.client.gui.widget.ClickableWidget widget) {
@@ -489,7 +461,6 @@ public class GuiApiModMenuEntry implements ModMenuApi {
             }
             ctx.disableScissor();
 
-            // 7. Draw Scrollbar
             if (maxScrollY > 0) {
                 int rx = width / 2 + 155;
                 int trackHeight = bottomBoundary - topBoundary;
@@ -501,7 +472,6 @@ public class GuiApiModMenuEntry implements ModMenuApi {
                 ctx.fill(rx, thumbY, rx + 4, thumbY + thumbHeight, 0x88FFFFFF);
             }
 
-            // 8. Draw divider above bottom buttons
             ctx.fill(width / 2 - 150, height - 32, width / 2 + 150, height - 31, 0x44FFFFFF);
         }
 
@@ -1066,9 +1036,17 @@ public class GuiApiModMenuEntry implements ModMenuApi {
 
         private int slot;
         private int amount;
+        private int pageVal;
         private boolean glint;
         private GuiDefinition.ClickType clickType;
         private Optional<GuiDefinition.ToggleDefinition> toggle;
+
+        // Caching fields to fix wipe-on-tab-switch bug!
+        private String itemText;
+        private String nameText;
+        private String loreText;
+        private String actionsText;
+        private String conditionText;
 
         ButtonEditorScreen(ButtonListScreen parent, int index, GuiDefinition.Button btn) {
             super(Text.literal("Edit Button"));
@@ -1076,6 +1054,7 @@ public class GuiApiModMenuEntry implements ModMenuApi {
             this.index = index;
             this.btn = btn;
             this.slot = btn.slot();
+            this.pageVal = btn.page();
             this.glint = btn.glint();
             this.toggle = btn.toggle();
             this.clickType = btn.clickType();
@@ -1085,6 +1064,13 @@ public class GuiApiModMenuEntry implements ModMenuApi {
                 parsedAmount = Integer.parseInt(btn.amount());
             } catch (NumberFormatException ignored) {}
             this.amount = parsedAmount;
+
+            // Load initial texts
+            this.itemText = btn.item();
+            this.nameText = btn.name();
+            this.loreText = String.join(";", btn.lore());
+            this.actionsText = serializeActionsToString(btn.actions());
+            this.conditionText = btn.condition().isPresent() ? btn.condition().get().type().name().toLowerCase() + ":" + btn.condition().get().value() : "";
         }
 
         public void updateToggle(Optional<GuiDefinition.ToggleDefinition> newToggle) {
@@ -1096,6 +1082,14 @@ public class GuiApiModMenuEntry implements ModMenuApi {
             return vals[(current.ordinal() + 1) % vals.length];
         }
 
+        private void saveCurrentTabFields() {
+            if (itemField != null) itemText = itemField.getText();
+            if (nameField != null) nameText = nameField.getText();
+            if (loreField != null) loreText = loreField.getText();
+            if (actionsField != null) actionsText = actionsField.getText();
+            if (conditionField != null) conditionText = conditionField.getText();
+        }
+
         @Override
         protected void init() {
             int cx = width / 2;
@@ -1103,6 +1097,7 @@ public class GuiApiModMenuEntry implements ModMenuApi {
 
             // 1. Add Tab buttons
             ButtonWidget basicTabBtn = ButtonWidget.builder(Text.literal(currentTab == Tab.BASIC ? "§aBasic" : "§7Basic"), btn -> {
+                saveCurrentTabFields();
                 currentTab = Tab.BASIC;
                 this.init();
             }).dimensions(cx - 125, 22, 80, 18).build();
@@ -1110,6 +1105,7 @@ public class GuiApiModMenuEntry implements ModMenuApi {
             addDrawableChild(basicTabBtn);
 
             ButtonWidget appTabBtn = ButtonWidget.builder(Text.literal(currentTab == Tab.APPEARANCE ? "§aAppearance" : "§7Appearance"), btn -> {
+                saveCurrentTabFields();
                 currentTab = Tab.APPEARANCE;
                 this.init();
             }).dimensions(cx - 40, 22, 80, 18).build();
@@ -1117,6 +1113,7 @@ public class GuiApiModMenuEntry implements ModMenuApi {
             addDrawableChild(appTabBtn);
 
             ButtonWidget logicTabBtn = ButtonWidget.builder(Text.literal(currentTab == Tab.LOGIC ? "§aLogic" : "§7Logic"), btn -> {
+                saveCurrentTabFields();
                 currentTab = Tab.LOGIC;
                 this.init();
             }).dimensions(cx + 45, 22, 80, 18).build();
@@ -1125,60 +1122,44 @@ public class GuiApiModMenuEntry implements ModMenuApi {
 
             // 2. Add bottom buttons
             addDrawableChild(ButtonWidget.builder(Text.literal("Apply"), b -> {
+                saveCurrentTabFields();
+
                 // Build Lore list
                 List<String> finalLore = new ArrayList<>();
-                if (loreField != null) {
-                    String loreTxt = loreField.getText();
-                    if (!loreTxt.isEmpty()) {
-                        for (String s : loreTxt.split(";")) {
-                            finalLore.add(s);
-                        }
+                if (!loreText.isEmpty()) {
+                    for (String s : loreText.split(";")) {
+                        finalLore.add(s);
                     }
-                } else {
-                    finalLore.addAll(btn.lore());
                 }
 
                 // Build Actions list from semicolon-separated string
                 List<GuiDefinition.ButtonAction> finalActions = new ArrayList<>();
-                if (actionsField != null) {
-                    String actionsTxt = actionsField.getText();
-                    if (!actionsTxt.isEmpty()) {
-                        for (String s : actionsTxt.split(";")) {
-                            finalActions.add(parseActionFromString(s));
-                        }
+                if (!actionsText.isEmpty()) {
+                    for (String s : actionsText.split(";")) {
+                        finalActions.add(parseActionFromString(s));
                     }
-                } else {
-                    finalActions.addAll(btn.actions());
                 }
                 if (finalActions.isEmpty()) {
                     finalActions.add(new GuiDefinition.ButtonAction(GuiDefinition.ActionType.CLOSE, ""));
                 }
 
                 // Build Condition
-                Optional<GuiDefinition.ButtonCondition> finalCondition = btn.condition();
-                if (conditionField != null) {
-                    String condText = conditionField.getText().trim();
-                    if (!condText.isEmpty()) {
-                        String[] condParts = condText.split(":", 2);
-                        if (condParts.length == 2) {
-                            try {
-                                GuiDefinition.ConditionType ct = GuiDefinition.ConditionType.fromString(condParts[0]);
-                                finalCondition = Optional.of(new GuiDefinition.ButtonCondition(ct, condParts[1]));
-                            } catch (Exception ignored) {}
-                        }
-                    } else {
-                        finalCondition = Optional.empty();
+                Optional<GuiDefinition.ButtonCondition> finalCondition = Optional.empty();
+                if (!conditionText.isEmpty()) {
+                    String[] condParts = conditionText.split(":", 2);
+                    if (condParts.length == 2) {
+                        try {
+                            GuiDefinition.ConditionType ct = GuiDefinition.ConditionType.fromString(condParts[0]);
+                            finalCondition = Optional.of(new GuiDefinition.ButtonCondition(ct, condParts[1]));
+                        } catch (Exception ignored) {}
                     }
                 }
 
-                String finalItem = itemField != null ? itemField.getText() : btn.item();
-                String finalName = nameField != null ? nameField.getText() : btn.name();
-
                 GuiDefinition.Button newBtn = new GuiDefinition.Button(
                         slot,
-                        btn.page(),
-                        finalItem,
-                        finalName,
+                        pageVal,
+                        itemText,
+                        nameText,
                         finalLore,
                         glint,
                         clickType,
@@ -1209,65 +1190,26 @@ public class GuiApiModMenuEntry implements ModMenuApi {
             if (currentTab == Tab.BASIC) {
                 int y = startY;
 
-                // Slot Custom Input (No text field! Buttons: -9, -1, +1, +9)
-                addDrawableChild(new TextWidget(cx - 150, y, 300, 10, Text.literal("§eSlot Selection"), textRenderer));
-                TextWidget slotDisplay = new TextWidget(cx - 150, y + 14, 100, 10, Text.literal("§aSlot: §f" + slot), textRenderer);
-                addDrawableChild(slotDisplay);
+                // Page selection slider (Page 1-10)
+                IntegerSliderWidget pageSlider = new IntegerSliderWidget(cx - 150, y, 300, 20, "Page (1-10)", 0, 9, pageVal, val -> pageVal = val);
+                addDrawableChild(pageSlider);
+                y += 24;
 
-                addDrawableChild(ButtonWidget.builder(Text.literal("-9"), b -> {
-                    slot = Math.max(0, slot - 9);
-                    slotDisplay.setMessage(Text.literal("§aSlot: §f" + slot));
-                }).dimensions(cx - 40, y + 10, 22, 18).build());
+                // Slot selection slider (Slot 0-53)
+                IntegerSliderWidget slotSlider = new IntegerSliderWidget(cx - 150, y, 300, 20, "Slot Position", 0, 53, slot, val -> slot = val);
+                addDrawableChild(slotSlider);
+                y += 24;
 
-                addDrawableChild(ButtonWidget.builder(Text.literal("-1"), b -> {
-                    slot = Math.max(0, slot - 1);
-                    slotDisplay.setMessage(Text.literal("§aSlot: §f" + slot));
-                }).dimensions(cx - 15, y + 10, 22, 18).build());
-
-                addDrawableChild(ButtonWidget.builder(Text.literal("+1"), b -> {
-                    slot = Math.min(53, slot + 1);
-                    slotDisplay.setMessage(Text.literal("§aSlot: §f" + slot));
-                }).dimensions(cx + 10, y + 10, 22, 18).build());
-
-                addDrawableChild(ButtonWidget.builder(Text.literal("+9"), b -> {
-                    slot = Math.min(53, slot + 9);
-                    slotDisplay.setMessage(Text.literal("§aSlot: §f" + slot));
-                }).dimensions(cx + 35, y + 10, 22, 18).build());
-
-                y += 34;
-
-                // Amount Custom Input (No text field! Buttons: -10, -1, +1, +10)
-                addDrawableChild(new TextWidget(cx - 150, y, 300, 10, Text.literal("§eAmount Selection"), textRenderer));
-                TextWidget amountDisplay = new TextWidget(cx - 150, y + 14, 100, 10, Text.literal("§aAmount: §f" + amount), textRenderer);
-                addDrawableChild(amountDisplay);
-
-                addDrawableChild(ButtonWidget.builder(Text.literal("-10"), b -> {
-                    amount = Math.max(1, amount - 10);
-                    amountDisplay.setMessage(Text.literal("§aAmount: §f" + amount));
-                }).dimensions(cx - 40, y + 10, 22, 18).build());
-
-                addDrawableChild(ButtonWidget.builder(Text.literal("-1"), b -> {
-                    amount = Math.max(1, amount - 1);
-                    amountDisplay.setMessage(Text.literal("§aAmount: §f" + amount));
-                }).dimensions(cx - 15, y + 10, 22, 18).build());
-
-                addDrawableChild(ButtonWidget.builder(Text.literal("+1"), b -> {
-                    amount = Math.min(99, amount + 1);
-                    amountDisplay.setMessage(Text.literal("§aAmount: §f" + amount));
-                }).dimensions(cx + 10, y + 10, 22, 18).build());
-
-                addDrawableChild(ButtonWidget.builder(Text.literal("+10"), b -> {
-                    amount = Math.min(99, amount + 10);
-                    amountDisplay.setMessage(Text.literal("§aAmount: §f" + amount));
-                }).dimensions(cx + 35, y + 10, 22, 18).build());
-
-                y += 34;
+                // Amount selection slider (Amount 1-99)
+                IntegerSliderWidget amountSlider = new IntegerSliderWidget(cx - 150, y, 300, 20, "Amount", 1, 99, amount, val -> amount = val);
+                addDrawableChild(amountSlider);
+                y += 24;
 
                 // Item ID Input (Text Field)
                 addDrawableChild(new TextWidget(cx - 150, y, 300, 10, Text.literal("§eItem ID"), textRenderer));
                 itemField = new TextFieldWidget(textRenderer, cx - 150, y + 12, 300, 18, Text.literal("Item ID"));
                 itemField.setMaxLength(256);
-                itemField.setText(btn.item());
+                itemField.setText(itemText);
                 addDrawableChild(itemField);
                 y += 34;
 
@@ -1275,7 +1217,7 @@ public class GuiApiModMenuEntry implements ModMenuApi {
                 addDrawableChild(new TextWidget(cx - 150, y, 300, 10, Text.literal("§eDisplay Name"), textRenderer));
                 nameField = new TextFieldWidget(textRenderer, cx - 150, y + 12, 300, 18, Text.literal("Display Name"));
                 nameField.setMaxLength(128);
-                nameField.setText(btn.name());
+                nameField.setText(nameText);
                 addDrawableChild(nameField);
 
             } else if (currentTab == Tab.APPEARANCE) {
@@ -1302,7 +1244,7 @@ public class GuiApiModMenuEntry implements ModMenuApi {
                 addDrawableChild(new TextWidget(cx - 150, y, 300, 10, Text.literal("§eLore Lines (Separate by semicolon ';')"), textRenderer));
                 loreField = new TextFieldWidget(textRenderer, cx - 150, y + 12, 300, 18, Text.literal("Lore"));
                 loreField.setMaxLength(512);
-                loreField.setText(String.join(";", btn.lore()));
+                loreField.setText(loreText);
                 addDrawableChild(loreField);
 
             } else if (currentTab == Tab.LOGIC) {
@@ -1321,12 +1263,7 @@ public class GuiApiModMenuEntry implements ModMenuApi {
                 addDrawableChild(new TextWidget(cx - 150, y, 300, 10, Text.literal("§eCondition"), textRenderer));
                 conditionField = new TextFieldWidget(textRenderer, cx - 150, y + 12, 300, 18, Text.literal("Condition"));
                 conditionField.setMaxLength(128);
-                if (btn.condition().isPresent()) {
-                    GuiDefinition.ButtonCondition cond = btn.condition().get();
-                    conditionField.setText(cond.type().name().toLowerCase() + ":" + cond.value());
-                } else {
-                    conditionField.setText("");
-                }
+                conditionField.setText(conditionText);
                 addDrawableChild(conditionField);
                 y += 34;
 
@@ -1334,7 +1271,7 @@ public class GuiApiModMenuEntry implements ModMenuApi {
                 addDrawableChild(new TextWidget(cx - 150, y, 300, 10, Text.literal("§eActions (Separate by semicolon ';')"), textRenderer));
                 actionsField = new TextFieldWidget(textRenderer, cx - 150, y + 12, 300, 18, Text.literal("Actions"));
                 actionsField.setMaxLength(512);
-                actionsField.setText(serializeActionsToString(btn.actions()));
+                actionsField.setText(actionsText);
                 addDrawableChild(actionsField);
             }
         }
