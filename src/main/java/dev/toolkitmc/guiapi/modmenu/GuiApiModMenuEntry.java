@@ -195,10 +195,9 @@ public class GuiApiModMenuEntry implements ModMenuApi {
             // ── Loaded GUI list (Completed Scrollable/Paginated GUI List) ─────
             var all = GuiRegistry.INSTANCE.getAll();
             int count = all.size();
-            
+
             int guisPerPage = 3;
-            int totalPages = (count + guisPerPage - 1) / guisPerPage;
-            if (totalPages == 0) totalPages = 1;
+            final int totalPages = Math.max(1, (count + guisPerPage - 1) / guisPerPage);
             if (guiListPage >= totalPages) guiListPage = totalPages - 1;
 
             addDrawableChild(new TextWidget(cx - 150, y, 300, 10,
@@ -277,8 +276,10 @@ public class GuiApiModMenuEntry implements ModMenuApi {
         @Override
         public void render(DrawContext ctx, int mouseX, int mouseY, float delta) {
             super.render(ctx, mouseX, mouseY, delta);
+            // Title
             ctx.drawCenteredTextWithShadow(textRenderer,
-                    Text.literal("§6GUI API §7Settings"), width / 2, 8, 0xFFFFFF);
+                    Text.literal("§6GUI API §7Settings"), width / 2, 10, 0xFFFFFF);
+            // Divider above buttons
             ctx.fill(width / 2 - 150, height - 32, width / 2 + 150, height - 31, 0x44FFFFFF);
         }
 

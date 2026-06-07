@@ -339,9 +339,9 @@ public class BarrelGuiHandler {
         }
         stack.set(DataComponentTypes.CUSTOM_DATA, NbtComponent.of(new NbtCompound()));
         if (fill.hideTooltip()) {
-            // Pristine fix: Create and apply correct native 1.21.8 TooltipDisplayComponent showing no tooltips
+            // Pristine fix: Match Java 21 SequencedSet for empty list
             net.minecraft.component.type.TooltipDisplayComponent tooltipDisplay =
-                    new net.minecraft.component.type.TooltipDisplayComponent(false, java.util.List.of());
+                    new net.minecraft.component.type.TooltipDisplayComponent(false, new java.util.LinkedHashSet<>());
             stack.set(DataComponentTypes.TOOLTIP_DISPLAY, tooltipDisplay);
         }
         return stack;
@@ -442,21 +442,21 @@ public class BarrelGuiHandler {
 
         // --- Tooltip Control (1.21.4+ TOOLTIP_DISPLAY Component) ---
         if (hideTooltip) {
-            // Pristine fix: Create and apply correct native 1.21.8 TooltipDisplayComponent showing no tooltips
+            // Pristine fix: Match Java 21 SequencedSet for empty list
             net.minecraft.component.type.TooltipDisplayComponent tooltipDisplay =
-                    new net.minecraft.component.type.TooltipDisplayComponent(false, java.util.List.of());
+                    new net.minecraft.component.type.TooltipDisplayComponent(false, new java.util.LinkedHashSet<>());
             stack.set(DataComponentTypes.TOOLTIP_DISPLAY, tooltipDisplay);
         } else if (hideAdditionalTooltip) {
-            // Pristine fix: Create and apply correct native 1.21.8 TooltipDisplayComponent with specific hidden components
+            // Pristine fix: Match Java 21 SequencedSet constructor parameter
             net.minecraft.component.type.TooltipDisplayComponent tooltipDisplay =
-                    new net.minecraft.component.type.TooltipDisplayComponent(true, java.util.List.of(
+                    new net.minecraft.component.type.TooltipDisplayComponent(true, new java.util.LinkedHashSet<>(java.util.List.of(
                             DataComponentTypes.ATTRIBUTE_MODIFIERS,
                             DataComponentTypes.ENCHANTMENTS,
                             DataComponentTypes.STORED_ENCHANTMENTS,
                             DataComponentTypes.DYED_COLOR,
                             DataComponentTypes.POTION_CONTENTS,
                             DataComponentTypes.UNBREAKABLE
-                    ));
+                    )));
             stack.set(DataComponentTypes.TOOLTIP_DISPLAY, tooltipDisplay);
         }
 
