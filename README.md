@@ -200,18 +200,12 @@ Installing this mod on the client-side unlocks powerful, highly-polished user ex
 ### 2. Native Keybindings
 Integrates natively with Minecraft's official controls menu (**Options > Controls > Key Binds > GUI API**):
 * **Accept Rules (Open GUI):** Opens the default welcome GUI (Defaults to **`G`**).
-* **Toggle Search in GUI:** Activates the interactive slot search (Defaults to **`L`**).
-
-### 3. Interactive Slot Search (`L`)
-* Press **`L`** inside any GUI (or any chest/barrel container enventories!) to toggle the Search bar.
-* Type alphanumeric characters to search. Matching items are highlighted with a gorgeous HSB glowing neon color-cycling gradient, while non-matching slots are dimmed.
-* Minecraft closing/dropping hotkeys (like `E` and `Q`) are safely blocked while search is focused to ensure a pristine typing experience. Press `ESC` or `L` again to close.
 
 ---
 
 ## Examples
 
-Please refer to the updated `example-datapack` directory in the repository sources for highly-polished, fully-annotated examples demonstrating auto-refreshing clocks, direct scoreboard trading, status effect controllers, and custom visual models!
+Please refer to the updated [example-datapack](https://github.com/ToolkitMC/guiAPI/tree/main/example-datapack) directory in the repository sources for highly-polished, fully-annotated examples demonstrating auto-refreshing clocks, direct scoreboard trading, status effect controllers, and custom visual models!
 
 ---
 
