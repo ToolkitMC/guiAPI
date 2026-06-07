@@ -44,6 +44,24 @@ public class GuiApiModMenuEntry implements ModMenuApi {
 
     static class GuiApiConfigScreen extends Screen {
 
+        private enum Tab {
+            CONFIG, GUIS
+        }
+
+        private static class ScrollableElement {
+            public final net.minecraft.client.gui.Drawable drawable;
+            public final net.minecraft.client.gui.Element element;
+            public final int originalY;
+            public final int height;
+
+            public ScrollableElement(net.minecraft.client.gui.Drawable drawable, net.minecraft.client.gui.Element element, int originalY, int height) {
+                this.drawable = drawable;
+                this.element = element;
+                this.originalY = originalY;
+                this.height = height;
+            }
+        }
+
         private final Screen parent;
 
         // Live copies of settings (applied on Save)
@@ -58,7 +76,10 @@ public class GuiApiModMenuEntry implements ModMenuApi {
         private boolean logCommands;
         private int     defaultTickRate;
 
-        private int guiListPage = 0;
+        private Tab currentTab = Tab.CONFIG;
+        private final List<ScrollableElement> scrollableElements = new ArrayList<>();
+        private double scrollY = 0;
+        private int maxScrollY = 0;
 
         GuiApiConfigScreen(Screen parent) {
             super(Text.literal("GUI API — Settings"));
@@ -79,142 +100,27 @@ public class GuiApiModMenuEntry implements ModMenuApi {
         @Override
         protected void init() {
             int cx = width / 2;
-            int y  = 30;
+            this.clearChildren();
+            scrollableElements.clear();
 
-            // ── Settings ─────────────────────────────────────────────────────
+            // 1. Add persistent Tab Selectors (Fixed at Top)
+            ButtonWidget configTabBtn = ButtonWidget.builder(Text.literal(currentTab == Tab.CONFIG ? "§aSettings" : "§7Settings"), btn -> {
+                currentTab = Tab.CONFIG;
+                scrollY = 0;
+                this.init();
+            }).dimensions(cx - 105, 22, 100, 18).build();
+            configTabBtn.active = (currentTab != Tab.CONFIG);
+            addDrawableChild(configTabBtn);
 
-            addToggle(cx, y, "allow_console_run_with",
-                    "Allow run_with: console",
-                    "Permit buttons to run commands with console (OP-level) permission.",
-                    allowConsoleRunWith,
-                    v -> allowConsoleRunWith = v);
-            y += 22;
+            ButtonWidget guisTabBtn = ButtonWidget.builder(Text.literal(currentTab == Tab.GUIS ? "§aLoaded GUIs" : "§7Loaded GUIs"), btn -> {
+                currentTab = Tab.GUIS;
+                scrollY = 0;
+                this.init();
+            }).dimensions(cx + 5, 22, 100, 18).build();
+            guisTabBtn.active = (currentTab != Tab.GUIS);
+            addDrawableChild(guisTabBtn);
 
-            addToggle(cx, y, "log_unknown_items",
-                    "Log unknown item IDs",
-                    "Print a WARN to the log when a button uses an unrecognized item ID.",
-                    logUnknownItems,
-                    v -> logUnknownItems = v);
-            y += 22;
-
-            addToggle(cx, y, "log_unknown_sounds",
-                    "Log unknown sound IDs",
-                    "Print a WARN to the log when a sound action uses an unrecognized sound ID.",
-                    logUnknownSounds,
-                    v -> logUnknownSounds = v);
-            y += 22;
-
-            addToggle(cx, y, "debug_mode",
-                    "Debug mode",
-                    "Log GUI open/close, action execution and placeholder resolution to console.",
-                    debugMode,
-                    v -> debugMode = v);
-            y += 22;
-
-            addToggle(cx, y, "allow_close_on_move",
-                    "Allow close_on_move",
-                    "Globally permit menus to close automatically when players walk away.",
-                    allowCloseOnMove,
-                    v -> allowCloseOnMove = v);
-            y += 22;
-
-            addToggle(cx, y, "allow_delayed_actions",
-                    "Allow action delays",
-                    "Globally permit action chains to execute with tick delays.",
-                    allowDelayedActions,
-                    v -> allowDelayedActions = v);
-            y += 22;
-
-            addToggle(cx, y, "allow_status_effects",
-                    "Allow status effects",
-                    "Globally permit buttons and click actions to manage player potion effects.",
-                    allowStatusEffects,
-                    v -> allowStatusEffects = v);
-            y += 22;
-
-            addToggle(cx, y, "log_commands",
-                    "Log command executions",
-                    "Write a message to log console every time a GUI button runs a command.",
-                    logCommands,
-                    v -> logCommands = v);
-            y += 22;
-
-            // Default Tick Rate Controls
-            addDrawableChild(new TextWidget(cx - 150, y + 4, 150, 10, Text.literal("§fDefault Tick Rate"), textRenderer));
-            TextWidget[] defaultTickRateTextRef = new TextWidget[1];
-            defaultTickRateTextRef[0] = new TextWidget(cx + 10, y + 4, 40, 10, Text.literal("§e" + defaultTickRate), textRenderer);
-            addDrawableChild(defaultTickRateTextRef[0]);
-
-            addDrawableChild(ButtonWidget.builder(Text.literal("-5"), btn -> {
-                defaultTickRate = Math.max(0, defaultTickRate - 5);
-                defaultTickRateTextRef[0].setMessage(Text.literal("§e" + defaultTickRate));
-            }).dimensions(cx + 50, y, 20, 18).build());
-
-            addDrawableChild(ButtonWidget.builder(Text.literal("+5"), btn -> {
-                defaultTickRate = Math.min(2400, defaultTickRate + 5);
-                defaultTickRateTextRef[0].setMessage(Text.literal("§e" + defaultTickRate));
-            }).dimensions(cx + 75, y, 20, 18).build());
-            y += 22;
-
-            // Permission level — cycle 0-4
-            addDrawableChild(new TextWidget(cx - 150, y + 4, 200, 10,
-                    Text.literal("§fCommand permission level"), textRenderer));
-            addDrawableChild(ButtonWidget.builder(permLevelText(permissionLevel), btn -> {
-                permissionLevel = (permissionLevel + 1) % 5;
-                btn.setMessage(permLevelText(permissionLevel));
-            }).dimensions(cx + 60, y, 40, 20).build());
-            y += 26;
-
-            // ── Loaded GUI list (Completed Scrollable/Paginated GUI List) ─────
-            var all = GuiRegistry.INSTANCE.getAll();
-            int count = all.size();
-
-            int guisPerPage = 3;
-            final int totalPages = Math.max(1, (count + guisPerPage - 1) / guisPerPage);
-            if (guiListPage >= totalPages) guiListPage = totalPages - 1;
-
-            addDrawableChild(new TextWidget(cx - 150, y, 300, 10,
-                    Text.literal("§7Loaded GUIs: §f" + count + " (Page " + (guiListPage + 1) + "/" + totalPages + ")"),
-                    textRenderer));
-            y += 12;
-
-            List<java.util.Map.Entry<net.minecraft.util.Identifier, GuiDefinition>> list = new ArrayList<>(all.entrySet());
-            int startIdx = guiListPage * guisPerPage;
-            int endIdx = Math.min(startIdx + guisPerPage, count);
-
-            for (int i = startIdx; i < endIdx; i++) {
-                var entry = list.get(i);
-                var id = entry.getKey();
-                var def = entry.getValue();
-
-                // Client Feature: Clickable GUI list entries to open GUI Editor Screen
-                addDrawableChild(ButtonWidget.builder(
-                        Text.literal("Edit: " + id.getPath() + " (" + def.getRows() + " rows)"),
-                        btn -> MinecraftClient.getInstance().setScreen(new GuiEditorScreen(this, id, def))
-                ).dimensions(cx - 150, y, 300, 18).build());
-
-                y += 20;
-            }
-
-            // Pagination Controls for Loaded GUIs list
-            if (totalPages > 1) {
-                ButtonWidget prevBtn = ButtonWidget.builder(Text.literal("§e← Prev"), btn -> {
-                    guiListPage = Math.max(0, guiListPage - 1);
-                    this.init(); // Re-initialize list view
-                }).dimensions(cx - 150, y, 145, 18).build();
-                prevBtn.active = (guiListPage > 0);
-                addDrawableChild(prevBtn);
-
-                ButtonWidget nextBtn = ButtonWidget.builder(Text.literal("§eNext →"), btn -> {
-                    guiListPage = Math.min(totalPages - 1, guiListPage + 1);
-                    this.init(); // Re-initialize list view
-                }).dimensions(cx + 5, y, 145, 18).build();
-                nextBtn.active = (guiListPage < totalPages - 1);
-                addDrawableChild(nextBtn);
-                y += 22;
-            }
-
-            // ── Buttons ───────────────────────────────────────────────────────
+            // 2. Add persistent Action Buttons (Fixed at Bottom)
             addDrawableChild(ButtonWidget.builder(Text.literal("Save & Close"), btn -> {
                 GuiApiConfig cfg = GuiApiConfig.INSTANCE;
                 cfg.setAllowConsoleRunWith(allowConsoleRunWith);
@@ -239,35 +145,103 @@ public class GuiApiModMenuEntry implements ModMenuApi {
                 } else {
                     btn.setMessage(Text.literal("§cNot in-game"));
                 }
-            }).dimensions(cx - 0, height - 25, 100, 20).build());
+            }).dimensions(cx, height - 25, 100, 20).build());
 
             addDrawableChild(ButtonWidget.builder(Text.literal("Cancel"), btn ->
                     MinecraftClient.getInstance().setScreen(parent))
                     .dimensions(cx + 105, height - 25, 100, 20).build());
+
+            // 3. Populate Scrollable Elements based on selected tab
+            int startY = 48;
+            if (currentTab == Tab.CONFIG) {
+                int y = startY;
+
+                addScrollableToggle(cx, y, "Allow run_with: console",
+                        allowConsoleRunWith, v -> allowConsoleRunWith = v);
+                y += 22;
+
+                addScrollableToggle(cx, y, "Log unknown item IDs",
+                        logUnknownItems, v -> logUnknownItems = v);
+                y += 22;
+
+                addScrollableToggle(cx, y, "Log unknown sound IDs",
+                        logUnknownSounds, v -> logUnknownSounds = v);
+                y += 22;
+
+                addScrollableToggle(cx, y, "Debug mode",
+                        debugMode, v -> debugMode = v);
+                y += 22;
+
+                addScrollableToggle(cx, y, "Allow close_on_move",
+                        allowCloseOnMove, v -> allowCloseOnMove = v);
+                y += 22;
+
+                addScrollableToggle(cx, y, "Allow action delays",
+                        allowDelayedActions, v -> allowDelayedActions = v);
+                y += 22;
+
+                addScrollableToggle(cx, y, "Allow status effects",
+                        allowStatusEffects, v -> allowStatusEffects = v);
+                y += 22;
+
+                addScrollableToggle(cx, y, "Log command executions",
+                        logCommands, v -> logCommands = v);
+                y += 22;
+
+                addScrollableTickRateControls(cx, y);
+                y += 22;
+
+                addScrollablePermissionControls(cx, y);
+                y += 26;
+
+            } else {
+                // Tab.GUIS
+                int y = startY;
+                var all = GuiRegistry.INSTANCE.getAll();
+                int count = all.size();
+
+                TextWidget headerWidget = new TextWidget(cx - 150, y, 300, 10,
+                        Text.literal("§7Loaded GUIs: §f" + count),
+                        textRenderer);
+                addDrawableChild(headerWidget);
+                scrollableElements.add(new ScrollableElement(headerWidget, headerWidget, y, 10));
+                y += 16;
+
+                List<java.util.Map.Entry<net.minecraft.util.Identifier, GuiDefinition>> list = new ArrayList<>(all.entrySet());
+                for (int i = 0; i < count; i++) {
+                    var entry = list.get(i);
+                    var id = entry.getKey();
+                    var def = entry.getValue();
+
+                    ButtonWidget btnWidget = ButtonWidget.builder(
+                            Text.literal("Edit: " + id.getPath() + " (" + def.getRows() + " rows)"),
+                            btn -> MinecraftClient.getInstance().setScreen(new GuiEditorScreen(this, id, def))
+                    ).dimensions(cx - 150, y, 300, 18).build();
+
+                    addDrawableChild(btnWidget);
+                    scrollableElements.add(new ScrollableElement(btnWidget, btnWidget, y, 18));
+                    y += 22;
+                }
+            }
+
+            // 4. Calculate max scroll Y
+            int maxContentY = startY;
+            for (ScrollableElement se : scrollableElements) {
+                maxContentY = Math.max(maxContentY, se.originalY + se.height);
+            }
+            int viewportHeight = (height - 35) - startY;
+            maxScrollY = Math.max(0, maxContentY - (height - 35));
+
+            if (scrollY > maxScrollY) {
+                scrollY = maxScrollY;
+            }
+
+            updateScrollPositions();
         }
 
-        @Override
-        public void render(DrawContext ctx, int mouseX, int mouseY, float delta) {
-            super.render(ctx, mouseX, mouseY, delta);
-            // Title
-            ctx.drawCenteredTextWithShadow(textRenderer,
-                    Text.literal("§6GUI API §7Settings"), width / 2, 10, 0xFFFFFF);
-            // Divider above buttons
-            ctx.fill(width / 2 - 150, height - 32, width / 2 + 150, height - 31, 0x44FFFFFF);
-        }
-
-        @Override
-        public void close() {
-            MinecraftClient.getInstance().setScreen(parent);
-        }
-
-        // ── Toggle helper ─────────────────────────────────────────────────────
-
-        private void addToggle(int cx, int y, String key, String label, String tooltip,
-                               boolean initial, java.util.function.Consumer<Boolean> onChange) {
-            addDrawableChild(new TextWidget(cx - 150, y + 4, 200, 10,
-                    Text.literal("§f" + label), textRenderer));
-
+        private void addScrollableToggle(int cx, int y, String label, boolean initial, java.util.function.Consumer<Boolean> onChange) {
+            TextWidget labelWidget = new TextWidget(cx - 150, y + 4, 200, 10, Text.literal("§f" + label), textRenderer);
+            
             ButtonWidget[] ref = new ButtonWidget[1];
             ref[0] = ButtonWidget.builder(toggleText(initial), btn -> {
                 boolean next = !btn.getMessage().getString().contains("ON");
@@ -275,7 +249,136 @@ public class GuiApiModMenuEntry implements ModMenuApi {
                 btn.setMessage(toggleText(next));
             }).dimensions(cx + 60, y, 40, 20).build();
 
+            addDrawableChild(labelWidget);
             addDrawableChild(ref[0]);
+
+            scrollableElements.add(new ScrollableElement(labelWidget, labelWidget, y, 10));
+            scrollableElements.add(new ScrollableElement(ref[0], ref[0], y, 20));
+        }
+
+        private void addScrollableTickRateControls(int cx, int y) {
+            TextWidget labelWidget = new TextWidget(cx - 150, y + 4, 150, 10, Text.literal("§fDefault Tick Rate"), textRenderer);
+            TextWidget valueWidget = new TextWidget(cx + 10, y + 4, 40, 10, Text.literal("§e" + defaultTickRate), textRenderer);
+            
+            ButtonWidget minusBtn = ButtonWidget.builder(Text.literal("-5"), btn -> {
+                defaultTickRate = Math.max(0, defaultTickRate - 5);
+                valueWidget.setMessage(Text.literal("§e" + defaultTickRate));
+            }).dimensions(cx + 50, y, 20, 18).build();
+
+            ButtonWidget plusBtn = ButtonWidget.builder(Text.literal("+5"), btn -> {
+                defaultTickRate = Math.min(2400, defaultTickRate + 5);
+                valueWidget.setMessage(Text.literal("§e" + defaultTickRate));
+            }).dimensions(cx + 75, y, 20, 18).build();
+
+            addDrawableChild(labelWidget);
+            addDrawableChild(valueWidget);
+            addDrawableChild(minusBtn);
+            addDrawableChild(plusBtn);
+
+            scrollableElements.add(new ScrollableElement(labelWidget, labelWidget, y, 10));
+            scrollableElements.add(new ScrollableElement(valueWidget, valueWidget, y, 10));
+            scrollableElements.add(new ScrollableElement(minusBtn, minusBtn, y, 18));
+            scrollableElements.add(new ScrollableElement(plusBtn, plusBtn, y, 18));
+        }
+
+        private void addScrollablePermissionControls(int cx, int y) {
+            TextWidget labelWidget = new TextWidget(cx - 150, y + 4, 200, 10, Text.literal("§fCommand permission level"), textRenderer);
+            ButtonWidget btnWidget = ButtonWidget.builder(permLevelText(permissionLevel), btn -> {
+                permissionLevel = (permissionLevel + 1) % 5;
+                btn.setMessage(permLevelText(permissionLevel));
+            }).dimensions(cx + 60, y, 40, 20).build();
+
+            addDrawableChild(labelWidget);
+            addDrawableChild(btnWidget);
+
+            scrollableElements.add(new ScrollableElement(labelWidget, labelWidget, y, 10));
+            scrollableElements.add(new ScrollableElement(btnWidget, btnWidget, y, 20));
+        }
+
+        private void updateScrollPositions() {
+            int topBoundary = 44;
+            int bottomBoundary = height - 35;
+
+            for (ScrollableElement se : scrollableElements) {
+                int newY = se.originalY - (int)scrollY;
+                if (se.drawable instanceof net.minecraft.client.gui.widget.ClickableWidget widget) {
+                    widget.setY(newY);
+                    boolean inViewport = (newY + se.height > topBoundary && newY < bottomBoundary);
+                    widget.visible = inViewport;
+                    widget.active = inViewport;
+                }
+            }
+        }
+
+        @Override
+        public boolean mouseScrolled(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
+            scrollY -= verticalAmount * 12;
+            if (scrollY < 0) scrollY = 0;
+            if (scrollY > maxScrollY) scrollY = maxScrollY;
+            updateScrollPositions();
+            return true;
+        }
+
+        @Override
+        public void render(DrawContext ctx, int mouseX, int mouseY, float delta) {
+            // 1. Temporarily hide scrollable widgets so super.render doesnt draw them without clipping
+            for (ScrollableElement se : scrollableElements) {
+                if (se.drawable instanceof net.minecraft.client.gui.widget.ClickableWidget widget) {
+                    widget.visible = false;
+                }
+            }
+
+            // 2. Render background and fixed buttons
+            super.render(ctx, mouseX, mouseY, delta);
+
+            // 3. Restore visibility states of viewport-visible elements
+            int topBoundary = 44;
+            int bottomBoundary = height - 35;
+            for (ScrollableElement se : scrollableElements) {
+                int newY = se.originalY - (int)scrollY;
+                if (se.drawable instanceof net.minecraft.client.gui.widget.ClickableWidget widget) {
+                    boolean inViewport = (newY + se.height > topBoundary && newY < bottomBoundary);
+                    widget.visible = inViewport;
+                }
+            }
+
+            // 4. Render Title
+            ctx.drawCenteredTextWithShadow(textRenderer,
+                    Text.literal("§6GUI API §7Settings"), width / 2, 8, 0xFFFFFF);
+
+            // 5. Draw a subtle line underneath the tab buttons
+            ctx.fill(width / 2 - 150, 42, width / 2 + 150, 43, 0x44FFFFFF);
+
+            // 6. Enable Scissor & Draw Scrollable Widgets
+            ctx.enableScissor(0, topBoundary, width, bottomBoundary);
+            for (ScrollableElement se : scrollableElements) {
+                if (se.drawable instanceof net.minecraft.client.gui.widget.ClickableWidget widget) {
+                    if (widget.visible) {
+                        widget.render(ctx, mouseX, mouseY, delta);
+                    }
+                }
+            }
+            ctx.disableScissor();
+
+            // 7. Draw Scrollbar
+            if (maxScrollY > 0) {
+                int rx = width / 2 + 155;
+                int trackHeight = bottomBoundary - topBoundary;
+                int viewportHeight = trackHeight;
+                int thumbHeight = Math.max(15, (int)((double)viewportHeight / (viewportHeight + maxScrollY) * trackHeight));
+                int thumbY = topBoundary + (int)(scrollY / maxScrollY * (trackHeight - thumbHeight));
+
+                ctx.fill(rx, topBoundary, rx + 4, bottomBoundary, 0x22FFFFFF);
+                ctx.fill(rx, thumbY, rx + 4, thumbY + thumbHeight, 0x88FFFFFF);
+            }
+
+            // 8. Draw divider above bottom buttons
+            ctx.fill(width / 2 - 150, height - 32, width / 2 + 150, height - 31, 0x44FFFFFF);
+        }
+
+        @Override
+        public void close() {
+            MinecraftClient.getInstance().setScreen(parent);
         }
 
         private static Text toggleText(boolean on) {
@@ -294,8 +397,7 @@ public class GuiApiModMenuEntry implements ModMenuApi {
             return Text.literal(color + level);
         }
     }
-
-    // ── GUI Editor Screen ────────────────────────────────────────────────────
+        // ── GUI Editor Screen ────────────────────────────────────────────────────
 
     static class GuiEditorScreen extends Screen {
         private final Screen parent;
