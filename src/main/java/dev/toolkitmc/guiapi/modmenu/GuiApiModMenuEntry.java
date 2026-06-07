@@ -760,14 +760,18 @@ public class GuiApiModMenuEntry implements ModMenuApi {
         }
 
         @Override
+        public void renderBackground(DrawContext context, int mouseX, int mouseY, float delta) {
+            // Safe No-Op: Bypasses vanilla background blur completely to avoid "Can only blur once per frame" IllegalStateException crash!
+        }
+
+        @Override
         public void render(DrawContext ctx, int mouseX, int mouseY, float delta) {
+            // Draw a highly professional solid opaque dark background manually
+            ctx.fill(0, 0, width, height, 0xFF0A0A0A);
+
             if (state == State.CONFIRM_SAVE || state == State.CONFIRM_RELOAD) {
                 super.render(ctx, mouseX, mouseY, delta);
-            } else {
-                this.renderBackground(ctx, mouseX, mouseY, delta);
             }
-
-            ctx.fill(0, 0, width, height, 0xDD050505);
 
             int cx = width / 2;
             int cy = height / 2;
