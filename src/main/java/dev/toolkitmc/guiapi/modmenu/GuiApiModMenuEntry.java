@@ -761,7 +761,12 @@ public class GuiApiModMenuEntry implements ModMenuApi {
 
         @Override
         public void render(DrawContext ctx, int mouseX, int mouseY, float delta) {
-            this.renderBackground(ctx, mouseX, mouseY, delta);
+            if (state == State.CONFIRM_SAVE || state == State.CONFIRM_RELOAD) {
+                super.render(ctx, mouseX, mouseY, delta);
+            } else {
+                this.renderBackground(ctx, mouseX, mouseY, delta);
+            }
+
             ctx.fill(0, 0, width, height, 0xDD050505);
 
             int cx = width / 2;
@@ -774,7 +779,6 @@ public class GuiApiModMenuEntry implements ModMenuApi {
                 case CONFIRM_SAVE -> {
                     ctx.drawCenteredTextWithShadow(textRenderer, Text.literal("§6★ Save Confirmation ★"), cx, cy - 30, 0xFFFFFF);
                     ctx.drawCenteredTextWithShadow(textRenderer, Text.literal("§fAre you sure you want to write changes to disk?"), cx, cy - 10, 0xAAAAAA);
-                    super.render(ctx, mouseX, mouseY, delta);
                 }
                 case SAVING_PROGRESS -> {
                     String status = "Locating Datapack Folder...";
@@ -792,7 +796,6 @@ public class GuiApiModMenuEntry implements ModMenuApi {
                 case CONFIRM_RELOAD -> {
                     ctx.drawCenteredTextWithShadow(textRenderer, Text.literal("§6★ Save Complete! ★"), cx, cy - 30, 0xFFFFFF);
                     ctx.drawCenteredTextWithShadow(textRenderer, Text.literal("§fDo you want to reload GUIs now to sync in-game?"), cx, cy - 10, 0xAAAAAA);
-                    super.render(ctx, mouseX, mouseY, delta);
                 }
                 case RELOADING_SPINNER -> {
                     ctx.drawCenteredTextWithShadow(textRenderer, Text.literal("§6★ Reloading Resources ★"), cx, cy - 40, 0xFFFFFF);
@@ -1041,41 +1044,44 @@ public class GuiApiModMenuEntry implements ModMenuApi {
     // ── Button Properties Editor Screen ──────────────────────────────────────
 
     static class ButtonEditorScreen extends Screen {
+        private enum Tab {
+            BASIC, APPEARANCE, LOGIC
+        }
+
         private final ButtonListScreen parent;
         private final int index;
         private final GuiDefinition.Button btn;
 
-        private TextFieldWidget slotField;
+        private Tab currentTab = Tab.BASIC;
+
         private TextFieldWidget itemField;
         private TextFieldWidget nameField;
-        private TextFieldWidget amountField;
-        private TextFieldWidget loreField; // Combined Lore input field (separated by ;)
-
-        // Combined Actions input field (separated by ;)
+        private TextFieldWidget loreField; 
         private TextFieldWidget actionsField;
-
-        private boolean glint;
-        private Optional<GuiDefinition.ToggleDefinition> toggle;
-        private GuiDefinition.ClickType clickType;
         private TextFieldWidget conditionField;
+
+        private int slot;
+        private int amount;
+        private boolean glint;
+        private GuiDefinition.ClickType clickType;
+        private Optional<GuiDefinition.ToggleDefinition> toggle;
 
         ButtonEditorScreen(ButtonListScreen parent, int index, GuiDefinition.Button btn) {
             super(Text.literal("Edit Button"));
             this.parent = parent;
             this.index = index;
             this.btn = btn;
+            this.slot = btn.slot();
             this.glint = btn.glint();
             this.toggle = btn.toggle();
             this.clickType = btn.clickType();
+
+            int parsedAmount = 1;
+            try {
+                parsedAmount = Integer.parseInt(btn.amount());
+            } catch (NumberFormatException ignored) {}
+            this.amount = parsedAmount;
         }
-
-        public void updateToggle(Optional<GuiDefinition.ToggleDefinition> newToggle) {
-            this.toggle = newToggle;
-        }
-
-
-
-
 
         private static GuiDefinition.ClickType nextClickType(GuiDefinition.ClickType current) {
             GuiDefinition.ClickType[] vals = GuiDefinition.ClickType.values();
@@ -1085,140 +1091,86 @@ public class GuiApiModMenuEntry implements ModMenuApi {
         @Override
         protected void init() {
             int cx = width / 2;
-            int y = 25;
+            this.clearChildren();
 
-            // Slot Input
-            addDrawableChild(new TextWidget(cx - 150, y, 100, 10, Text.literal("§eSlot (0-53)"), textRenderer));
-            slotField = new TextFieldWidget(textRenderer, cx - 150, y + 12, 60, 18, Text.literal("Slot"));
-            slotField.setText(String.valueOf(btn.slot()));
-            addDrawableChild(slotField);
+            // 1. Add Tab buttons
+            ButtonWidget basicTabBtn = ButtonWidget.builder(Text.literal(currentTab == Tab.BASIC ? "§aBasic" : "§7Basic"), btn -> {
+                currentTab = Tab.BASIC;
+                this.init();
+            }).dimensions(cx - 125, 22, 80, 18).build();
+            basicTabBtn.active = (currentTab != Tab.BASIC);
+            addDrawableChild(basicTabBtn);
 
-            // Amount Input
-            addDrawableChild(new TextWidget(cx - 80, y, 100, 10, Text.literal("§eAmount"), textRenderer));
-            amountField = new TextFieldWidget(textRenderer, cx - 80, y + 12, 60, 18, Text.literal("Amount"));
-            amountField.setText(btn.amount());
-            addDrawableChild(amountField);
+            ButtonWidget appTabBtn = ButtonWidget.builder(Text.literal(currentTab == Tab.APPEARANCE ? "§aAppearance" : "§7Appearance"), btn -> {
+                currentTab = Tab.APPEARANCE;
+                this.init();
+            }).dimensions(cx - 40, 22, 80, 18).build();
+            appTabBtn.active = (currentTab != Tab.APPEARANCE);
+            addDrawableChild(appTabBtn);
 
-            // Glint Toggle
-            addDrawableChild(new TextWidget(cx - 10, y, 100, 10, Text.literal("§eGlint"), textRenderer));
-            ButtonWidget[] glintBtnRef = new ButtonWidget[1];
-            glintBtnRef[0] = ButtonWidget.builder(toggleText(glint), b -> {
-                glint = !glint;
-                b.setMessage(toggleText(glint));
-            }).dimensions(cx - 10, y + 12, 40, 18).build();
-            addDrawableChild(glintBtnRef[0]);
+            ButtonWidget logicTabBtn = ButtonWidget.builder(Text.literal(currentTab == Tab.LOGIC ? "§aLogic" : "§7Logic"), btn -> {
+                currentTab = Tab.LOGIC;
+                this.init();
+            }).dimensions(cx + 45, 22, 80, 18).build();
+            logicTabBtn.active = (currentTab != Tab.LOGIC);
+            addDrawableChild(logicTabBtn);
 
-            // Edit Toggle Properties Navigation
-            addDrawableChild(new TextWidget(cx + 40, y, 110, 10, Text.literal("§eToggle Button"), textRenderer));
-            ButtonWidget[] toggleBtnRef = new ButtonWidget[1];
-            toggleBtnRef[0] = ButtonWidget.builder(Text.literal(toggle.isPresent() ? "§aCONFIGURED" : "§cDISABLED"), b -> {
-                MinecraftClient.getInstance().setScreen(new ToggleEditorScreen(this, toggle));
-            }).dimensions(cx + 40, y + 12, 110, 18).build();
-            addDrawableChild(toggleBtnRef[0]);
-            y += 38;
-
-            // Item ID Input
-            addDrawableChild(new TextWidget(cx - 150, y, 300, 10, Text.literal("§eItem ID"), textRenderer));
-            y += 12;
-            itemField = new TextFieldWidget(textRenderer, cx - 150, y, 300, 18, Text.literal("Item ID"));
-            itemField.setMaxLength(256);
-            itemField.setText(btn.item());
-            addDrawableChild(itemField);
-            y += 24;
-
-            // Display Name Input
-            addDrawableChild(new TextWidget(cx - 150, y, 300, 10, Text.literal("§eDisplay Name"), textRenderer));
-            y += 12;
-            nameField = new TextFieldWidget(textRenderer, cx - 150, y, 300, 18, Text.literal("Display Name"));
-            nameField.setMaxLength(128);
-            nameField.setText(btn.name());
-            addDrawableChild(nameField);
-            y += 24;
-
-            // Click Type & Condition Inputs
-            addDrawableChild(new TextWidget(cx - 150, y, 140, 10, Text.literal("§eClick Type"), textRenderer));
-            ButtonWidget clickTypeBtn = ButtonWidget.builder(Text.literal(clickType.name()), b -> {
-                clickType = nextClickType(clickType);
-                b.setMessage(Text.literal(clickType.name()));
-            }).dimensions(cx - 150, y + 12, 140, 18).build();
-            addDrawableChild(clickTypeBtn);
-
-            addDrawableChild(new TextWidget(cx + 10, y, 140, 10, Text.literal("§eCondition"), textRenderer));
-            conditionField = new TextFieldWidget(textRenderer, cx + 10, y + 12, 140, 18, Text.literal("Condition"));
-            conditionField.setMaxLength(128);
-            if (btn.condition().isPresent()) {
-                GuiDefinition.ButtonCondition cond = btn.condition().get();
-                conditionField.setText(cond.type().name().toLowerCase() + ":" + cond.value());
-            } else {
-                conditionField.setText("");
-            }
-            addDrawableChild(conditionField);
-            y += 34;
-
-            // Lore Input (joined by ;)
-            addDrawableChild(new TextWidget(cx - 150, y, 300, 10, Text.literal("§eLore Lines (Separate by semicolon ';')"), textRenderer));
-            y += 12;
-            loreField = new TextFieldWidget(textRenderer, cx - 150, y, 300, 18, Text.literal("Lore"));
-            loreField.setMaxLength(512);
-            loreField.setText(String.join(";", btn.lore()));
-            addDrawableChild(loreField);
-            y += 24;
-
-            // Multiple Actions Input (joined by ;)
-            addDrawableChild(new TextWidget(cx - 150, y, 300, 10, Text.literal("§eActions (Format: 'type:value' or 'type:varKey:value', separate by ';')"), textRenderer));
-            y += 12;
-            actionsField = new TextFieldWidget(textRenderer, cx - 150, y, 300, 18, Text.literal("Actions"));
-            actionsField.setMaxLength(512);
-            actionsField.setText(serializeActionsToString(btn.actions()));
-            addDrawableChild(actionsField);
-            y += 32;
-
-            // Actions
-            // Save/Apply
+            // 2. Add bottom buttons
             addDrawableChild(ButtonWidget.builder(Text.literal("Apply"), b -> {
-                int slotVal = 0;
-                try {
-                    slotVal = Math.max(0, Integer.parseInt(slotField.getText()));
-                } catch (NumberFormatException ignored) {}
-
                 // Build Lore list
                 List<String> finalLore = new ArrayList<>();
-                String loreTxt = loreField.getText();
-                if (!loreTxt.isEmpty()) {
-                    for (String s : loreTxt.split(";")) {
-                        finalLore.add(s);
+                if (loreField != null) {
+                    String loreTxt = loreField.getText();
+                    if (!loreTxt.isEmpty()) {
+                        for (String s : loreTxt.split(";")) {
+                            finalLore.add(s);
+                        }
                     }
+                } else {
+                    finalLore = btn.lore();
                 }
 
                 // Build Actions list from semicolon-separated string
                 List<GuiDefinition.ButtonAction> finalActions = new ArrayList<>();
-                String actionsTxt = actionsField.getText();
-                if (!actionsTxt.isEmpty()) {
-                    for (String s : actionsTxt.split(";")) {
-                        finalActions.add(parseActionFromString(s));
+                if (actionsField != null) {
+                    String actionsTxt = actionsField.getText();
+                    if (!actionsTxt.isEmpty()) {
+                        for (String s : actionsTxt.split(";")) {
+                            finalActions.add(parseActionFromString(s));
+                        }
                     }
+                } else {
+                    finalActions = btn.actions();
                 }
                 if (finalActions.isEmpty()) {
                     finalActions.add(new GuiDefinition.ButtonAction(GuiDefinition.ActionType.CLOSE, ""));
                 }
 
-                Optional<GuiDefinition.ButtonCondition> finalCondition = Optional.empty();
-                String condText = conditionField.getText().trim();
-                if (!condText.isEmpty()) {
-                    String[] condParts = condText.split(":", 2);
-                    if (condParts.length == 2) {
-                        try {
-                            GuiDefinition.ConditionType ct = GuiDefinition.ConditionType.fromString(condParts[0]);
-                            finalCondition = Optional.of(new GuiDefinition.ButtonCondition(ct, condParts[1]));
-                        } catch (Exception ignored) {}
+                // Build Condition
+                Optional<GuiDefinition.ButtonCondition> finalCondition = btn.condition();
+                if (conditionField != null) {
+                    String condText = conditionField.getText().trim();
+                    if (!condText.isEmpty()) {
+                        String[] condParts = condText.split(":", 2);
+                        if (condParts.length == 2) {
+                            try {
+                                GuiDefinition.ConditionType ct = GuiDefinition.ConditionType.fromString(condParts[0]);
+                                finalCondition = Optional.of(new GuiDefinition.ButtonCondition(ct, condParts[1]));
+                            } catch (Exception ignored) {}
+                        }
+                    } else {
+                        finalCondition = Optional.empty();
                     }
                 }
 
+                String finalItem = itemField != null ? itemField.getText() : btn.item();
+                String finalName = nameField != null ? nameField.getText() : btn.name();
+
                 GuiDefinition.Button newBtn = new GuiDefinition.Button(
-                        slotVal,
+                        slot,
                         btn.page(),
-                        itemField.getText(),
-                        nameField.getText(),
+                        finalItem,
+                        finalName,
                         finalLore,
                         glint,
                         clickType,
@@ -1227,7 +1179,7 @@ public class GuiApiModMenuEntry implements ModMenuApi {
                         toggle,
                         btn.customModelData(),
                         btn.itemModel(),
-                        amountField.getText(),
+                        String.valueOf(amount),
                         btn.hideTooltip(),
                         btn.hideAdditionalTooltip()
                 );
@@ -1235,35 +1187,165 @@ public class GuiApiModMenuEntry implements ModMenuApi {
                 MinecraftClient.getInstance().setScreen(parent);
             }).dimensions(cx - 155, height - 25, 100, 20).build());
 
-            // Delete Button
             addDrawableChild(ButtonWidget.builder(Text.literal("§cDelete Button"), b -> {
                 parent.deleteButton(index);
                 MinecraftClient.getInstance().setScreen(parent);
             }).dimensions(cx - 50, height - 25, 100, 20).build());
 
-            // Cancel
             addDrawableChild(ButtonWidget.builder(Text.literal("Cancel"), b ->
                     MinecraftClient.getInstance().setScreen(parent))
                     .dimensions(cx + 55, height - 25, 100, 20).build());
+
+            // 3. Tab Specific Inputs
+            int startY = 48;
+            if (currentTab == Tab.BASIC) {
+                int y = startY;
+
+                // Slot Custom Input (No text field! Buttons: -9, -1, +1, +9)
+                addDrawableChild(new TextWidget(cx - 150, y, 300, 10, Text.literal("§eSlot Selection"), textRenderer));
+                TextWidget slotDisplay = new TextWidget(cx - 150, y + 14, 100, 10, Text.literal("§aSlot: §f" + slot), textRenderer);
+                addDrawableChild(slotDisplay);
+
+                addDrawableChild(ButtonWidget.builder(Text.literal("-9"), b -> {
+                    slot = Math.max(0, slot - 9);
+                    slotDisplay.setMessage(Text.literal("§aSlot: §f" + slot));
+                }).dimensions(cx - 40, y + 10, 22, 18).build());
+
+                addDrawableChild(ButtonWidget.builder(Text.literal("-1"), b -> {
+                    slot = Math.max(0, slot - 1);
+                    slotDisplay.setMessage(Text.literal("§aSlot: §f" + slot));
+                }).dimensions(cx - 15, y + 10, 22, 18).build());
+
+                addDrawableChild(ButtonWidget.builder(Text.literal("+1"), b -> {
+                    slot = Math.min(53, slot + 1);
+                    slotDisplay.setMessage(Text.literal("§aSlot: §f" + slot));
+                }).dimensions(cx + 10, y + 10, 22, 18).build());
+
+                addDrawableChild(ButtonWidget.builder(Text.literal("+9"), b -> {
+                    slot = Math.min(53, slot + 9);
+                    slotDisplay.setMessage(Text.literal("§aSlot: §f" + slot));
+                }).dimensions(cx + 35, y + 10, 22, 18).build());
+
+                y += 34;
+
+                // Amount Custom Input (No text field! Buttons: -10, -1, +1, +10)
+                addDrawableChild(new TextWidget(cx - 150, y, 300, 10, Text.literal("§eAmount Selection"), textRenderer));
+                TextWidget amountDisplay = new TextWidget(cx - 150, y + 14, 100, 10, Text.literal("§aAmount: §f" + amount), textRenderer);
+                addDrawableChild(amountDisplay);
+
+                addDrawableChild(ButtonWidget.builder(Text.literal("-10"), b -> {
+                    amount = Math.max(1, amount - 10);
+                    amountDisplay.setMessage(Text.literal("§aAmount: §f" + amount));
+                }).dimensions(cx - 40, y + 10, 22, 18).build());
+
+                addDrawableChild(ButtonWidget.builder(Text.literal("-1"), b -> {
+                    amount = Math.max(1, amount - 1);
+                    amountDisplay.setMessage(Text.literal("§aAmount: §f" + amount));
+                }).dimensions(cx - 15, y + 10, 22, 18).build());
+
+                addDrawableChild(ButtonWidget.builder(Text.literal("+1"), b -> {
+                    amount = Math.min(99, amount + 1);
+                    amountDisplay.setMessage(Text.literal("§aAmount: §f" + amount));
+                }).dimensions(cx + 10, y + 10, 22, 18).build());
+
+                addDrawableChild(ButtonWidget.builder(Text.literal("+10"), b -> {
+                    amount = Math.min(99, amount + 10);
+                    amountDisplay.setMessage(Text.literal("§aAmount: §f" + amount));
+                }).dimensions(cx + 35, y + 10, 22, 18).build());
+
+                y += 34;
+
+                // Item ID Input (Text Field)
+                addDrawableChild(new TextWidget(cx - 150, y, 300, 10, Text.literal("§eItem ID"), textRenderer));
+                itemField = new TextFieldWidget(textRenderer, cx - 150, y + 12, 300, 18, Text.literal("Item ID"));
+                itemField.setMaxLength(256);
+                itemField.setText(btn.item());
+                addDrawableChild(itemField);
+                y += 34;
+
+                // Display Name Input (Text Field)
+                addDrawableChild(new TextWidget(cx - 150, y, 300, 10, Text.literal("§eDisplay Name"), textRenderer));
+                nameField = new TextFieldWidget(textRenderer, cx - 150, y + 12, 300, 18, Text.literal("Display Name"));
+                nameField.setMaxLength(128);
+                nameField.setText(btn.name());
+                addDrawableChild(nameField);
+
+            } else if (currentTab == Tab.APPEARANCE) {
+                int y = startY;
+
+                // Glint Toggle
+                addDrawableChild(new TextWidget(cx - 150, y + 4, 200, 10, Text.literal("§eEnable Glint"), textRenderer));
+                ButtonWidget glintBtn = ButtonWidget.builder(toggleText(glint), b -> {
+                    glint = !glint;
+                    b.setMessage(toggleText(glint));
+                }).dimensions(cx + 60, y, 40, 18).build();
+                addDrawableChild(glintBtn);
+                y += 24;
+
+                // Toggle Button Navigation
+                addDrawableChild(new TextWidget(cx - 150, y + 4, 200, 10, Text.literal("§eToggle Properties"), textRenderer));
+                ButtonWidget toggleBtn = ButtonWidget.builder(Text.literal(toggle.isPresent() ? "§aCONFIGURED" : "§cDISABLED"), b -> {
+                    MinecraftClient.getInstance().setScreen(new ToggleEditorScreen(this, toggle));
+                }).dimensions(cx + 40, y, 110, 18).build();
+                addDrawableChild(toggleBtn);
+                y += 26;
+
+                // Lore Input
+                addDrawableChild(new TextWidget(cx - 150, y, 300, 10, Text.literal("§eLore Lines (Separate by semicolon ';')"), textRenderer));
+                loreField = new TextFieldWidget(textRenderer, cx - 150, y + 12, 300, 18, Text.literal("Lore"));
+                loreField.setMaxLength(512);
+                loreField.setText(String.join(";", btn.lore()));
+                addDrawableChild(loreField);
+
+            } else if (currentTab == Tab.LOGIC) {
+                int y = startY;
+
+                // Click Type
+                addDrawableChild(new TextWidget(cx - 150, y + 4, 200, 10, Text.literal("§eClick Type"), textRenderer));
+                ButtonWidget clickTypeBtn = ButtonWidget.builder(Text.literal(clickType.name()), b -> {
+                    clickType = nextClickType(clickType);
+                    b.setMessage(Text.literal(clickType.name()));
+                }).dimensions(cx + 60, y, 60, 18).build();
+                addDrawableChild(clickTypeBtn);
+                y += 24;
+
+                // Condition
+                addDrawableChild(new TextWidget(cx - 150, y, 300, 10, Text.literal("§eCondition"), textRenderer));
+                conditionField = new TextFieldWidget(textRenderer, cx - 150, y + 12, 300, 18, Text.literal("Condition"));
+                conditionField.setMaxLength(128);
+                if (btn.condition().isPresent()) {
+                    GuiDefinition.ButtonCondition cond = btn.condition().get();
+                    conditionField.setText(cond.type().name().toLowerCase() + ":" + cond.value());
+                } else {
+                    conditionField.setText("");
+                }
+                addDrawableChild(conditionField);
+                y += 34;
+
+                // Actions
+                addDrawableChild(new TextWidget(cx - 150, y, 300, 10, Text.literal("§eActions (Separate by semicolon ';')"), textRenderer));
+                actionsField = new TextFieldWidget(textRenderer, cx - 150, y + 12, 300, 18, Text.literal("Actions"));
+                actionsField.setMaxLength(512);
+                actionsField.setText(serializeActionsToString(btn.actions()));
+                addDrawableChild(actionsField);
+            }
         }
 
         @Override
         public void render(DrawContext ctx, int mouseX, int mouseY, float delta) {
             super.render(ctx, mouseX, mouseY, delta);
             ctx.drawCenteredTextWithShadow(textRenderer,
-                    Text.literal("§6Edit Button Properties"), width / 2, 10, 0xFFFFFF);
+                    Text.literal("§6Edit Button Properties"), width / 2, 8, 0xFFFFFF);
             ctx.fill(width / 2 - 150, height - 32, width / 2 + 150, height - 31, 0x44FFFFFF);
         }
 
         @Override
         public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
-            if (slotField.keyPressed(keyCode, scanCode, modifiers) ||
-                    amountField.keyPressed(keyCode, scanCode, modifiers) ||
-                    itemField.keyPressed(keyCode, scanCode, modifiers) ||
-                    nameField.keyPressed(keyCode, scanCode, modifiers) ||
-                    conditionField.keyPressed(keyCode, scanCode, modifiers) ||
-                    loreField.keyPressed(keyCode, scanCode, modifiers) ||
-                    actionsField.keyPressed(keyCode, scanCode, modifiers)) {
+            if ((itemField != null && itemField.keyPressed(keyCode, scanCode, modifiers)) ||
+                (nameField != null && nameField.keyPressed(keyCode, scanCode, modifiers)) ||
+                (conditionField != null && conditionField.keyPressed(keyCode, scanCode, modifiers)) ||
+                (loreField != null && loreField.keyPressed(keyCode, scanCode, modifiers)) ||
+                (actionsField != null && actionsField.keyPressed(keyCode, scanCode, modifiers))) {
                 return true;
             }
             return super.keyPressed(keyCode, scanCode, modifiers);
@@ -1271,13 +1353,11 @@ public class GuiApiModMenuEntry implements ModMenuApi {
 
         @Override
         public boolean charTyped(char chr, int modifiers) {
-            if (slotField.charTyped(chr, modifiers) ||
-                    amountField.charTyped(chr, modifiers) ||
-                    itemField.charTyped(chr, modifiers) ||
-                    nameField.charTyped(chr, modifiers) ||
-                    conditionField.charTyped(chr, modifiers) ||
-                    loreField.charTyped(chr, modifiers) ||
-                    actionsField.charTyped(chr, modifiers)) {
+            if ((itemField != null && itemField.charTyped(chr, modifiers)) ||
+                (nameField != null && nameField.charTyped(chr, modifiers)) ||
+                (conditionField != null && conditionField.charTyped(chr, modifiers)) ||
+                (loreField != null && loreField.charTyped(chr, modifiers)) ||
+                (actionsField != null && actionsField.charTyped(chr, modifiers))) {
                 return true;
             }
             return super.charTyped(chr, modifiers);
@@ -1287,8 +1367,7 @@ public class GuiApiModMenuEntry implements ModMenuApi {
             return on ? Text.literal("§aON") : Text.literal("§cOFF");
         }
     }
-
-    // ── Toggle Editor Screen ─────────────────────────────────────────────────
+        // ── Toggle Editor Screen ─────────────────────────────────────────────────
 
     static class ToggleEditorScreen extends Screen {
         private final ButtonEditorScreen parent;
