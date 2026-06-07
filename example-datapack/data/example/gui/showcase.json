@@ -1,142 +1,329 @@
 {
   "title": "§5Showcase §8— {player} §8[{page1}/{pages}]",
   "rows": 6,
-  "on_open": [
-    { "type": "sound", "value": "minecraft:block.note_block.chime:1.0:1.5" },
-    { "type": "message", "value": "§7Welcome, §f{player}§7! Coins: §e{score:coins}" }
-  ],
-  "on_close": [
-    { "type": "message", "value": "§7Closed showcase GUI." }
-  ],
+  "tick_rate": 0,
+  "close_on_move": false,
   "buttons": [
     {
-      "slot": 0, "page": 0,
+      "slot": 0,
+      "page": 0,
       "item": "minecraft:lime_stained_glass_pane",
       "name": "§aLeft Click",
-      "lore": ["§7Triggers on left-click only.", "§8Player: {player}"],
+      "amount": "1",
+      "glint": false,
       "click_type": "left",
+      "hide_tooltip": false,
+      "hide_additional_tooltip": false,
+      "lore": [
+        "§7Triggers on left-click only.",
+        "§8Player: {player}"
+      ],
       "actions": [
-        { "type": "sound", "value": "minecraft:ui.button.click" },
-        { "type": "message", "value": "§aYou left-clicked, {player}!" }
+        {
+          "type": "sound",
+          "value": "minecraft:ui.button.click"
+        },
+        {
+          "type": "message",
+          "value": "§aYou left-clicked, {player}!"
+        }
       ]
     },
     {
-      "slot": 0, "page": 0,
+      "slot": 0,
+      "page": 0,
       "item": "minecraft:yellow_stained_glass_pane",
       "name": "§eRight Click",
-      "lore": ["§7Triggers on right-click only."],
-      "click_type": "right",
+      "amount": "1",
+      "glint": false,
+      "click_type": "any",
+      "hide_tooltip": false,
+      "hide_additional_tooltip": false,
+      "lore": [
+        "§7Triggers on right-click only."
+      ],
       "actions": [
-        { "type": "sound", "value": "minecraft:ui.button.click:1.0:0.8" },
-        { "type": "message", "value": "§eYou right-clicked, {player}!" }
+        {
+          "type": "sound",
+          "value": "minecraft:ui.button.click:1.0:0.8"
+        },
+        {
+          "type": "message",
+          "value": "§eYou right-clicked, {player}!"
+        }
       ]
     },
     {
-      "slot": 1, "page": 0,
+      "slot": 1,
+      "page": 0,
       "item": "minecraft:cyan_stained_glass_pane",
       "name": "§bShift Click",
-      "lore": ["§7Triggers on shift+click only."],
+      "amount": "1",
+      "glint": false,
       "click_type": "shift",
+      "hide_tooltip": false,
+      "hide_additional_tooltip": false,
+      "lore": [
+        "§7Triggers on shift+click only."
+      ],
       "actions": [
-        { "type": "sound", "value": "minecraft:ui.button.click:1.0:1.5" },
-        { "type": "message", "value": "§bYou shift-clicked, {player}!" }
+        {
+          "type": "sound",
+          "value": "minecraft:ui.button.click:1.0:1.5"
+        },
+        {
+          "type": "message",
+          "value": "§bYou shift-clicked, {player}!"
+        }
       ]
     },
     {
-      "slot": 3, "page": 0,
+      "slot": 3,
+      "page": 0,
       "item": "minecraft:name_tag",
       "name": "§6{player}",
+      "amount": "1",
+      "glint": false,
+      "click_type": "any",
+      "hide_tooltip": false,
+      "hide_additional_tooltip": false,
       "lore": [
         "§7Coins: §e{score:coins}",
         "§7Page: §f{page1} / {pages}",
         "§7GUI: §8{gui}"
       ],
-      "actions": [{ "type": "sound", "value": "minecraft:entity.experience_orb.pickup" }]
+      "actions": [
+        {
+          "type": "sound",
+          "value": "minecraft:entity.experience_orb.pickup"
+        }
+      ]
     },
     {
-      "slot": 5, "page": 0,
+      "slot": 5,
+      "page": 0,
       "item": "minecraft:nether_star",
       "name": "§6Admin Only",
-      "lore": ["§7Visible only with the §cadmin§7 tag.", "§8{player}"],
+      "amount": "1",
       "glint": true,
-      "condition": { "type": "has_tag", "value": "admin" },
-      "actions": [{ "type": "message", "value": "§6{player} is an admin." }]
+      "click_type": "any",
+      "hide_tooltip": false,
+      "hide_additional_tooltip": false,
+      "lore": [
+        "§7Visible only with the §cadmin§7 tag.",
+        "§8{player}"
+      ],
+      "condition": {
+        "type": "has_tag",
+        "value": "admin"
+      },
+      "actions": [
+        {
+          "type": "message",
+          "value": "§6{player} is an admin."
+        }
+      ]
     },
     {
-      "slot": 6, "page": 0,
+      "slot": 6,
+      "page": 0,
       "item": "minecraft:barrier",
       "name": "§cGuest Only",
-      "lore": ["§7Visible only WITHOUT the §cadmin§7 tag."],
-      "condition": { "type": "not_tag", "value": "admin" },
-      "actions": [{ "type": "message", "value": "§c{player} is not an admin." }]
+      "amount": "1",
+      "glint": false,
+      "click_type": "any",
+      "hide_tooltip": false,
+      "hide_additional_tooltip": false,
+      "lore": [
+        "§7Visible only WITHOUT the §cadmin§7 tag."
+      ],
+      "condition": {
+        "type": "not_tag",
+        "value": "admin"
+      },
+      "actions": [
+        {
+          "type": "message",
+          "value": "§c{player} is not an admin."
+        }
+      ]
     },
     {
-      "slot": 9, "page": 0,
+      "slot": 9,
+      "page": 0,
+      "item": "",
+      "name": "",
+      "amount": "1",
+      "glint": false,
+      "click_type": "any",
+      "hide_tooltip": false,
+      "hide_additional_tooltip": false,
+      "lore": [],
       "toggle": {
         "tag": "showcase_toggle",
-        "item_on":  "minecraft:lime_dye",
+        "item_on": "minecraft:lime_dye",
         "item_off": "minecraft:gray_dye",
-        "name_on":  "§aToggle: ON",
+        "name_on": "§aToggle: ON",
         "name_off": "§7Toggle: OFF",
-        "lore_on":  ["§7Click to turn off.", "§8{player}"],
-        "lore_off": ["§7Click to turn on.",  "§8{player}"],
         "glint_on": true,
+        "glint_off": false,
+        "amount_on": "1",
+        "amount_off": "1",
+        "hide_tooltip_on": false,
+        "hide_tooltip_off": false,
+        "hide_additional_tooltip_on": false,
+        "hide_additional_tooltip_off": false,
         "actions_on": [
-          { "type": "sound", "value": "minecraft:block.lever.click:1.0:0.8" },
-          { "type": "message", "value": "§7Toggle turned OFF, {player}." }
+          {
+            "type": "sound",
+            "value": "minecraft:block.lever.click:1.0:0.8"
+          },
+          {
+            "type": "message",
+            "value": "§7Toggle turned OFF, {player}."
+          },
+          {
+          "type": "refresh",
+          "value": ""
+        }
         ],
         "actions_off": [
-          { "type": "sound", "value": "minecraft:block.lever.click:1.0:1.2" },
-          { "type": "message", "value": "§aToggle turned ON, {player}!" }
+          {
+            "type": "sound",
+            "value": "minecraft:block.lever.click:1.0:1.2"
+          },
+          {
+            "type": "message",
+            "value": "§aToggle turned ON, {player}!"
+          },
+          {
+          "type": "refresh",
+          "value": ""
+        }
         ]
       }
     },
     {
-      "slot": 11, "page": 0,
+      "slot": 11,
+      "page": 0,
       "item": "minecraft:paper",
       "name": "§fMulti-Action",
-      "lore": ["§7Command + message + close.", "§8{player} on page {page1}."],
+      "amount": "1",
+      "glint": false,
+      "click_type": "any",
+      "hide_tooltip": false,
+      "hide_additional_tooltip": false,
+      "lore": [
+        "§7Command + message + close.",
+        "§8{player} on page {page1}."
+      ],
       "actions": [
-        { "type": "sound", "value": "minecraft:entity.arrow.hit_player:0.5:1.0" },
-        { "type": "run_command", "value": "say §7{player} ran multi-action." },
-        { "type": "message", "value": "§7Done, {player}." },
-        { "type": "close" }
+        {
+          "type": "sound",
+          "value": "minecraft:entity.arrow.hit_player:0.5:1.0"
+        },
+        {
+          "type": "run_command",
+          "value": "say §7{player} ran multi-action."
+        },
+        {
+          "type": "message",
+          "value": "§7Done, {player}."
+        },
+        {
+          "type": "close",
+          "value": ""
+        }
       ]
     },
     {
-      "slot": 53, "page": 0,
+      "slot": 53,
+      "page": 0,
       "item": "minecraft:arrow",
       "name": "§7Next Page →",
-      "lore": ["§8Page {page1} / {pages}"],
+      "amount": "1",
+      "glint": false,
+      "click_type": "any",
+      "hide_tooltip": false,
+      "hide_additional_tooltip": false,
+      "lore": [
+        "§8Page {page1} / {pages}"
+      ],
       "actions": [
-        { "type": "sound", "value": "minecraft:item.book.page_turn" },
-        { "type": "next_page" }
+        {
+          "type": "sound",
+          "value": "minecraft:item.book.page_turn"
+        },
+        {
+          "type": "next_page",
+          "value": ""
+        }
       ]
     },
     {
-      "slot": 4, "page": 1,
+      "slot": 4,
+      "page": 1,
       "item": "minecraft:ender_eye",
       "name": "§5Page 2",
-      "lore": ["§7{player} is on page {page1} of {pages}."],
-      "actions": [{ "type": "message", "value": "§5Page 2, {player}!" }]
-    },
-    {
-      "slot": 45, "page": 1,
-      "item": "minecraft:arrow",
-      "name": "§7← Previous Page",
-      "lore": ["§8Page {page1} / {pages}"],
+      "amount": "1",
+      "glint": false,
+      "click_type": "any",
+      "hide_tooltip": false,
+      "hide_additional_tooltip": false,
+      "lore": [
+        "§7{player} is on page {page1} of {pages}."
+      ],
       "actions": [
-        { "type": "sound", "value": "minecraft:item.book.page_turn" },
-        { "type": "prev_page" }
+        {
+          "type": "message",
+          "value": "§5Page 2, {player}!"
+        }
       ]
     },
     {
-      "slot": 49, "page": 1,
+      "slot": 45,
+      "page": 1,
+      "item": "minecraft:arrow",
+      "name": "§7← Previous Page",
+      "amount": "1",
+      "glint": false,
+      "click_type": "any",
+      "hide_tooltip": false,
+      "hide_additional_tooltip": false,
+      "lore": [
+        "§8Page {page1} / {pages}"
+      ],
+      "actions": [
+        {
+          "type": "sound",
+          "value": "minecraft:item.book.page_turn"
+        },
+        {
+          "type": "prev_page",
+          "value": ""
+        }
+      ]
+    },
+    {
+      "slot": 49,
+      "page": 1,
       "item": "minecraft:barrier",
       "name": "§cClose",
+      "amount": "1",
+      "glint": false,
+      "click_type": "any",
+      "hide_tooltip": false,
+      "hide_additional_tooltip": false,
+      "lore": [],
       "actions": [
-        { "type": "sound", "value": "minecraft:block.wooden_button.click_off" },
-        { "type": "close" }
+        {
+          "type": "sound",
+          "value": "minecraft:block.wooden_button.click_off"
+        },
+        {
+          "type": "close",
+          "value": ""
+        }
       ]
     }
   ]

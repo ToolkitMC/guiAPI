@@ -1,69 +1,152 @@
 {
   "title": "§6Counter: §f{var:count}  §8— {player}",
   "rows": 1,
+  "tick_rate": 0,
+  "close_on_move": false,
   "filler": {
     "item": "minecraft:gray_stained_glass_pane",
     "name": " ",
     "glint": false,
     "hide_tooltip": true
   },
-  "on_open": [
-    { "type": "sound", "value": "minecraft:block.note_block.pling:0.8:1.0" },
-    { "type": "set_var", "var": "count", "value": "1" }
-  ],
   "buttons": [
     {
       "slot": 2,
+      "page": 0,
       "item": "minecraft:lime_dye",
       "name": "§a+1",
-      "lore": ["§7Current: §f{var:count}"],
+      "amount": "1",
+      "glint": false,
+      "click_type": "any",
+      "hide_tooltip": false,
+      "hide_additional_tooltip": false,
+      "lore": [
+        "§7Current: §f{var:count}"
+      ],
       "actions": [
-        { "type": "add_var", "var": "count", "value": "1" },
-        { "type": "sound", "value": "minecraft:block.note_block.pling:1.0:1.5" },
-        { "type": "refresh" }
+        {
+          "type": "add_var",
+          "value": "1",
+          "var": "count"
+        },
+        {
+          "type": "sound",
+          "value": "minecraft:block.note_block.pling:1.0:1.5"
+        },
+        {
+          "type": "refresh",
+          "value": ""
+        }
       ]
     },
     {
       "slot": 3,
+      "page": 0,
       "item": "minecraft:red_dye",
       "name": "§c-1",
-      "lore": ["§7Current: §f{var:count}", "§8Disabled at 0."],
-      "condition": { "type": "var_gt", "value": "count:0" },
+      "amount": "1",
+      "glint": false,
+      "click_type": "any",
+      "hide_tooltip": false,
+      "hide_additional_tooltip": false,
+      "lore": [
+        "§7Current: §f{var:count}",
+        "§8Disabled at 0."
+      ],
+      "condition": {
+        "type": "var_gt",
+        "value": "count:0"
+      },
       "actions": [
-        { "type": "sub_var", "var": "count", "value": "1" },
-        { "type": "sound", "value": "minecraft:block.note_block.bass:1.0:1.0" },
-        { "type": "refresh" }
+        {
+          "type": "sub_var",
+          "value": "1",
+          "var": "count"
+        },
+        {
+          "type": "sound",
+          "value": "minecraft:block.note_block.bass:1.0:1.0"
+        },
+        {
+          "type": "refresh",
+          "value": ""
+        }
       ]
     },
     {
       "slot": 4,
+      "page": 0,
       "item": "minecraft:paper",
       "name": "§fValue: §e{var:count}",
       "amount": "{var:count}",
+      "glint": false,
+      "click_type": "any",
+      "hide_tooltip": false,
+      "hide_additional_tooltip": false,
       "lore": [
         "§7Player: §f{player}",
         "§7GUI: §8{gui}"
+      ],
+      "actions": [
+        {
+          "type": "close",
+          "value": ""
+        }
       ]
     },
     {
       "slot": 5,
+      "page": 0,
       "item": "minecraft:comparator",
       "name": "§7Reset",
-      "lore": ["§8Only visible when count > 0."],
-      "condition": { "type": "var_set", "value": "count" },
+      "amount": "1",
+      "glint": false,
+      "click_type": "any",
+      "hide_tooltip": false,
+      "hide_additional_tooltip": false,
+      "lore": [
+        "§8Only visible when count \u003e 0."
+      ],
+      "condition": {
+        "type": "var_set",
+        "value": "count"
+      },
       "actions": [
-        { "type": "reset_var", "var": "count" },
-        { "type": "sound", "value": "minecraft:block.lever.click:1.0:0.8" },
-        { "type": "refresh" }
+        {
+          "type": "reset_var",
+          "value": "",
+          "var": "count"
+        },
+        {
+          "type": "sound",
+          "value": "minecraft:block.lever.click:1.0:0.8"
+        },
+        {
+          "type": "refresh",
+          "value": ""
+        }
       ]
     },
     {
       "slot": 7,
+      "page": 0,
       "item": "minecraft:barrier",
       "name": "§cClose",
+      "amount": "1",
+      "glint": false,
+      "click_type": "any",
+      "hide_tooltip": false,
+      "hide_additional_tooltip": false,
+      "lore": [],
       "actions": [
-        { "type": "sound", "value": "minecraft:block.wooden_button.click_off" },
-        { "type": "close" }
+        {
+          "type": "sound",
+          "value": "minecraft:block.wooden_button.click_off"
+        },
+        {
+          "type": "close",
+          "value": ""
+        }
       ]
     }
   ]
