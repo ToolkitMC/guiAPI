@@ -1135,7 +1135,7 @@ public class GuiApiModMenuEntry implements ModMenuApi {
                         }
                     }
                 } else {
-                    finalLore = btn.lore();
+                    finalLore.addAll(btn.lore());
                 }
 
                 // Build Actions list from semicolon-separated string
@@ -1148,7 +1148,7 @@ public class GuiApiModMenuEntry implements ModMenuApi {
                         }
                     }
                 } else {
-                    finalActions = btn.actions();
+                    finalActions.addAll(btn.actions());
                 }
                 if (finalActions.isEmpty()) {
                     finalActions.add(new GuiDefinition.ButtonAction(GuiDefinition.ActionType.CLOSE, ""));
