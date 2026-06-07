@@ -4,6 +4,7 @@ import com.terraformersmc.modmenu.api.ConfigScreenFactory;
 import com.terraformersmc.modmenu.api.ModMenuApi;
 import dev.toolkitmc.guiapi.config.GuiApiConfig;
 import dev.toolkitmc.guiapi.gui.GuiDefinition;
+import dev.toolkitmc.guiapi.gui.GuiActionParser;
 import dev.toolkitmc.guiapi.loader.GuiRegistry;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
