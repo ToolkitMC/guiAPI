@@ -40,57 +40,9 @@ public class GuiApiModMenuEntry implements ModMenuApi {
         return GuiActionParser.serializeActionsToString(actions);
     }
 
-    public static class IntegerSliderWidget extends net.minecraft.client.gui.widget.SliderWidget {
-        private final int min;
-        private final int max;
-        private final String prefix;
-        private final java.util.function.Consumer<Integer> onChange;
-
-        public IntegerSliderWidget(int x, int y, int width, int height, String prefix, int min, int max, int currentValue, java.util.function.Consumer<Integer> onChange) {
-            super(x, y, width, height, Text.literal(prefix + ": " + currentValue), (double)(currentValue - min) / (max - min));
-            this.min = min;
-            this.max = max;
-            this.prefix = prefix;
-            this.onChange = onChange;
-        }
-
-        @Override
-        protected void updateMessage() {
-            int intVal = getIntValue();
-            this.setMessage(Text.literal(prefix + ": " + intVal));
-        }
-
-        @Override
-        protected void applyValue() {
-            int intVal = getIntValue();
-            onChange.accept(intVal);
-        }
-
-        public int getIntValue() {
-            return min + (int)Math.round(this.value * (max - min));
-        }
-    }
-
     // ── Config screen ────────────────────────────────────────────────────────
 
     static class GuiApiConfigScreen extends Screen {
-        private enum Tab {
-            CONFIG, GUIS, OTHER
-        }
-
-        private static class ScrollableElement {
-            public final net.minecraft.client.gui.Drawable drawable;
-            public final net.minecraft.client.gui.Element element;
-            public final int originalY;
-            public final int height;
-
-            public ScrollableElement(net.minecraft.client.gui.Drawable drawable, net.minecraft.client.gui.Element element, int originalY, int height) {
-                this.drawable = drawable;
-                this.element = element;
-                this.originalY = originalY;
-                this.height = height;
-            }
-        }
 
         private final Screen parent;
 
@@ -106,23 +58,7 @@ public class GuiApiModMenuEntry implements ModMenuApi {
         private boolean logCommands;
         private int     defaultTickRate;
 
-        private Tab currentTab = Tab.CONFIG;
-        private final List<ScrollableElement> scrollableElements = new ArrayList<>();
-        private double scrollY = 0;
-        private int maxScrollY = 0;
-
-        // Our 4 Choice Features
-        private boolean enableButtonGlint;
-        private boolean showItemIdsDeveloper;
-        private boolean muteClickErrors;
-        private boolean enableCloseSound;
-
-        // Our 3 New Interactive Input Features
-        private String  chatPrefix;
-        private int     soundVolume;
-        private String  commandExecuteMode;
-
-        private TextFieldWidget chatPrefixField;
+        private int guiListPage = 0;
 
         GuiApiConfigScreen(Screen parent) {
             super(Text.literal("GUI API — Settings"));
@@ -138,69 +74,147 @@ public class GuiApiModMenuEntry implements ModMenuApi {
             this.allowStatusEffects  = cfg.isAllowStatusEffects();
             this.logCommands         = cfg.isLogCommands();
             this.defaultTickRate     = cfg.getDefaultTickRate();
-            this.enableButtonGlint    = cfg.isEnableButtonGlint();
-            this.showItemIdsDeveloper = cfg.isShowItemIdsDeveloper();
-            this.muteClickErrors      = cfg.isMuteClickErrors();
-            this.enableCloseSound     = cfg.isEnableCloseSound();
-            this.chatPrefix           = cfg.getChatPrefix();
-            this.soundVolume          = cfg.getSoundVolume();
-            this.commandExecuteMode   = cfg.getCommandExecuteMode();
-        }
-
-        private static String nextExecuteMode(String current) {
-            if ("CHAT".equalsIgnoreCase(current)) return "SYSTEM";
-            if ("SYSTEM".equalsIgnoreCase(current)) return "SILENT";
-            return "CHAT";
-        }
-
-        @Override
-        public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
-            if (chatPrefixField != null && chatPrefixField.visible && chatPrefixField.keyPressed(keyCode, scanCode, modifiers)) {
-                return true;
-            }
-            return super.keyPressed(keyCode, scanCode, modifiers);
-        }
-
-        @Override
-        public boolean charTyped(char chr, int modifiers) {
-            if (chatPrefixField != null && chatPrefixField.visible && chatPrefixField.charTyped(chr, modifiers)) {
-                return true;
-            }
-            return super.charTyped(chr, modifiers);
         }
 
         @Override
         protected void init() {
             int cx = width / 2;
-            this.clearChildren();
-            scrollableElements.clear();
+            int y  = 30;
 
-            // 1. Add persistent Tab Selectors (Fixed at Top)
-            ButtonWidget configTabBtn = ButtonWidget.builder(Text.literal(currentTab == Tab.CONFIG ? "§aSettings" : "§7Settings"), btn -> {
-                currentTab = Tab.CONFIG;
-                scrollY = 0;
-                this.init();
-            }).dimensions(cx - 125, 22, 80, 18).build();
-            configTabBtn.active = (currentTab != Tab.CONFIG);
-            addDrawableChild(configTabBtn);
+            // ── Settings ─────────────────────────────────────────────────────
 
-            ButtonWidget guisTabBtn = ButtonWidget.builder(Text.literal(currentTab == Tab.GUIS ? "§aLoaded GUIs" : "§7Loaded GUIs"), btn -> {
-                currentTab = Tab.GUIS;
-                scrollY = 0;
-                this.init();
-            }).dimensions(cx - 40, 22, 80, 18).build();
-            guisTabBtn.active = (currentTab != Tab.GUIS);
-            addDrawableChild(guisTabBtn);
+            addToggle(cx, y, "allow_console_run_with",
+                    "Allow run_with: console",
+                    "Permit buttons to run commands with console (OP-level) permission.",
+                    allowConsoleRunWith,
+                    v -> allowConsoleRunWith = v);
+            y += 22;
 
-            ButtonWidget otherTabBtn = ButtonWidget.builder(Text.literal(currentTab == Tab.OTHER ? "§aOther" : "§7Other"), btn -> {
-                currentTab = Tab.OTHER;
-                scrollY = 0;
-                this.init();
-            }).dimensions(cx + 45, 22, 80, 18).build();
-            otherTabBtn.active = (currentTab != Tab.OTHER);
-            addDrawableChild(otherTabBtn);
+            addToggle(cx, y, "log_unknown_items",
+                    "Log unknown item IDs",
+                    "Print a WARN to the log when a button uses an unrecognized item ID.",
+                    logUnknownItems,
+                    v -> logUnknownItems = v);
+            y += 22;
 
-            // 2. Add persistent Action Buttons (Fixed at Bottom)
+            addToggle(cx, y, "log_unknown_sounds",
+                    "Log unknown sound IDs",
+                    "Print a WARN to the log when a sound action uses an unrecognized sound ID.",
+                    logUnknownSounds,
+                    v -> logUnknownSounds = v);
+            y += 22;
+
+            addToggle(cx, y, "debug_mode",
+                    "Debug mode",
+                    "Log GUI open/close, action execution and placeholder resolution to console.",
+                    debugMode,
+                    v -> debugMode = v);
+            y += 22;
+
+            addToggle(cx, y, "allow_close_on_move",
+                    "Allow close_on_move",
+                    "Globally permit menus to close automatically when players walk away.",
+                    allowCloseOnMove,
+                    v -> allowCloseOnMove = v);
+            y += 22;
+
+            addToggle(cx, y, "allow_delayed_actions",
+                    "Allow action delays",
+                    "Globally permit action chains to execute with tick delays.",
+                    allowDelayedActions,
+                    v -> allowDelayedActions = v);
+            y += 22;
+
+            addToggle(cx, y, "allow_status_effects",
+                    "Allow status effects",
+                    "Globally permit buttons and click actions to manage player potion effects.",
+                    allowStatusEffects,
+                    v -> allowStatusEffects = v);
+            y += 22;
+
+            addToggle(cx, y, "log_commands",
+                    "Log command executions",
+                    "Write a message to log console every time a GUI button runs a command.",
+                    logCommands,
+                    v -> logCommands = v);
+            y += 22;
+
+            // Default Tick Rate Controls
+            addDrawableChild(new TextWidget(cx - 150, y + 4, 150, 10, Text.literal("§fDefault Tick Rate"), textRenderer));
+            TextWidget[] defaultTickRateTextRef = new TextWidget[1];
+            defaultTickRateTextRef[0] = new TextWidget(cx + 10, y + 4, 40, 10, Text.literal("§e" + defaultTickRate), textRenderer);
+            addDrawableChild(defaultTickRateTextRef[0]);
+
+            addDrawableChild(ButtonWidget.builder(Text.literal("-5"), btn -> {
+                defaultTickRate = Math.max(0, defaultTickRate - 5);
+                defaultTickRateTextRef[0].setMessage(Text.literal("§e" + defaultTickRate));
+            }).dimensions(cx + 50, y, 20, 18).build());
+
+            addDrawableChild(ButtonWidget.builder(Text.literal("+5"), btn -> {
+                defaultTickRate = Math.min(2400, defaultTickRate + 5);
+                defaultTickRateTextRef[0].setMessage(Text.literal("§e" + defaultTickRate));
+            }).dimensions(cx + 75, y, 20, 18).build());
+            y += 22;
+
+            // Permission level — cycle 0-4
+            addDrawableChild(new TextWidget(cx - 150, y + 4, 200, 10,
+                    Text.literal("§fCommand permission level"), textRenderer));
+            addDrawableChild(ButtonWidget.builder(permLevelText(permissionLevel), btn -> {
+                permissionLevel = (permissionLevel + 1) % 5;
+                btn.setMessage(permLevelText(permissionLevel));
+            }).dimensions(cx + 60, y, 40, 20).build());
+            y += 26;
+
+            // ── Loaded GUI list (Completed Scrollable/Paginated GUI List) ─────
+            var all = GuiRegistry.INSTANCE.getAll();
+            int count = all.size();
+
+            int guisPerPage = 3;
+            final int totalPages = Math.max(1, (count + guisPerPage - 1) / guisPerPage);
+            if (guiListPage >= totalPages) guiListPage = totalPages - 1;
+
+            addDrawableChild(new TextWidget(cx - 150, y, 300, 10,
+                    Text.literal("§7Loaded GUIs: §f" + count + " (Page " + (guiListPage + 1) + "/" + totalPages + ")"),
+                    textRenderer));
+            y += 12;
+
+            List<java.util.Map.Entry<net.minecraft.util.Identifier, GuiDefinition>> list = new ArrayList<>(all.entrySet());
+            int startIdx = guiListPage * guisPerPage;
+            int endIdx = Math.min(startIdx + guisPerPage, count);
+
+            for (int i = startIdx; i < endIdx; i++) {
+                var entry = list.get(i);
+                var id = entry.getKey();
+                var def = entry.getValue();
+
+                // Client Feature: Clickable GUI list entries to open GUI Editor Screen
+                addDrawableChild(ButtonWidget.builder(
+                        Text.literal("Edit: " + id.getPath() + " (" + def.getRows() + " rows)"),
+                        btn -> MinecraftClient.getInstance().setScreen(new GuiEditorScreen(this, id, def))
+                ).dimensions(cx - 150, y, 300, 18).build());
+
+                y += 20;
+            }
+
+            // Pagination Controls for Loaded GUIs list
+            if (totalPages > 1) {
+                ButtonWidget prevBtn = ButtonWidget.builder(Text.literal("§e← Prev"), btn -> {
+                    guiListPage = Math.max(0, guiListPage - 1);
+                    this.init(); // Re-initialize list view
+                }).dimensions(cx - 150, y, 145, 18).build();
+                prevBtn.active = (guiListPage > 0);
+                addDrawableChild(prevBtn);
+
+                ButtonWidget nextBtn = ButtonWidget.builder(Text.literal("§eNext →"), btn -> {
+                    guiListPage = Math.min(totalPages - 1, guiListPage + 1);
+                    this.init(); // Re-initialize list view
+                }).dimensions(cx + 5, y, 145, 18).build();
+                nextBtn.active = (guiListPage < totalPages - 1);
+                addDrawableChild(nextBtn);
+                y += 22;
+            }
+
+            // ── Buttons ───────────────────────────────────────────────────────
             addDrawableChild(ButtonWidget.builder(Text.literal("Save & Close"), btn -> {
                 GuiApiConfig cfg = GuiApiConfig.INSTANCE;
                 cfg.setAllowConsoleRunWith(allowConsoleRunWith);
@@ -213,16 +227,6 @@ public class GuiApiModMenuEntry implements ModMenuApi {
                 cfg.setAllowStatusEffects(allowStatusEffects);
                 cfg.setLogCommands(logCommands);
                 cfg.setDefaultTickRate(defaultTickRate);
-                cfg.setEnableButtonGlint(enableButtonGlint);
-                cfg.setShowItemIdsDeveloper(showItemIdsDeveloper);
-                cfg.setMuteClickErrors(muteClickErrors);
-                cfg.setEnableCloseSound(enableCloseSound);
-                if (chatPrefixField != null) {
-                    chatPrefix = chatPrefixField.getText();
-                }
-                cfg.setChatPrefix(chatPrefix);
-                cfg.setSoundVolume(soundVolume);
-                cfg.setCommandExecuteMode(commandExecuteMode);
                 cfg.save();
                 MinecraftClient.getInstance().setScreen(parent);
             }).dimensions(cx - 105, height - 25, 100, 20).build());
@@ -235,159 +239,35 @@ public class GuiApiModMenuEntry implements ModMenuApi {
                 } else {
                     btn.setMessage(Text.literal("§cNot in-game"));
                 }
-            }).dimensions(cx, height - 25, 100, 20).build());
+            }).dimensions(cx - 0, height - 25, 100, 20).build());
 
             addDrawableChild(ButtonWidget.builder(Text.literal("Cancel"), btn ->
                     MinecraftClient.getInstance().setScreen(parent))
                     .dimensions(cx + 105, height - 25, 100, 20).build());
-
-            // 3. Populate Scrollable Elements based on selected tab
-            int startY = 48;
-            if (currentTab == Tab.CONFIG) {
-                int y = startY;
-
-                addScrollableToggle(cx, y, "Allow run_with: console",
-                        allowConsoleRunWith, v -> allowConsoleRunWith = v);
-                y += 22;
-
-                addScrollableToggle(cx, y, "Log unknown item IDs",
-                        logUnknownItems, v -> logUnknownItems = v);
-                y += 22;
-
-                addScrollableToggle(cx, y, "Log unknown sound IDs",
-                        logUnknownSounds, v -> logUnknownSounds = v);
-                y += 22;
-
-                addScrollableToggle(cx, y, "Debug mode",
-                        debugMode, v -> debugMode = v);
-                y += 22;
-
-                addScrollableToggle(cx, y, "Allow close_on_move",
-                        allowCloseOnMove, v -> allowCloseOnMove = v);
-                y += 22;
-
-                addScrollableToggle(cx, y, "Allow action delays",
-                        allowDelayedActions, v -> allowDelayedActions = v);
-                y += 22;
-
-                addScrollableToggle(cx, y, "Allow status effects",
-                        allowStatusEffects, v -> allowStatusEffects = v);
-                y += 22;
-
-                addScrollableToggle(cx, y, "Log command executions",
-                        logCommands, v -> logCommands = v);
-                y += 22;
-
-                // Default Tick Rate Slider (0, 15 etc. number slider input!)
-                IntegerSliderWidget tickRateSlider = new IntegerSliderWidget(cx - 150, y, 300, 20, "Default Tick Rate", 1, 100, defaultTickRate, val -> defaultTickRate = val);
-                addDrawableChild(tickRateSlider);
-                scrollableElements.add(new ScrollableElement(tickRateSlider, tickRateSlider, y, 20));
-                y += 24;
-
-                // Command permission level Slider
-                IntegerSliderWidget permSlider = new IntegerSliderWidget(cx - 150, y, 300, 20, "Command permission level", 0, 4, permissionLevel, val -> permissionLevel = val);
-                addDrawableChild(permSlider);
-                scrollableElements.add(new ScrollableElement(permSlider, permSlider, y, 20));
-                y += 26;
-
-            } else if (currentTab == Tab.OTHER) {
-                int y = startY;
-
-                addScrollableToggle(cx, y, "Enable button glint",
-                        enableButtonGlint, v -> enableButtonGlint = v);
-                y += 22;
-
-                addScrollableToggle(cx, y, "Show developer item IDs",
-                        showItemIdsDeveloper, v -> showItemIdsDeveloper = v);
-                y += 22;
-
-                addScrollableToggle(cx, y, "Mute click errors",
-                        muteClickErrors, v -> muteClickErrors = v);
-                y += 22;
-
-                addScrollableToggle(cx, y, "Play close sound",
-                        enableCloseSound, v -> enableCloseSound = v);
-                y += 22;
-
-                // ── 3 New Interactive Input Features ──
-
-                // Input Type 1: Text Field for Chat Prefix
-                TextWidget chatPrefixLabel = new TextWidget(cx - 150, y, 300, 10, Text.literal("§eChat Prefix"), textRenderer);
-                chatPrefixField = new TextFieldWidget(textRenderer, cx - 150, y + 12, 300, 18, Text.literal("Prefix"));
-                chatPrefixField.setMaxLength(128);
-                chatPrefixField.setText(chatPrefix);
-                addDrawableChild(chatPrefixLabel);
-                addDrawableChild(chatPrefixField);
-                scrollableElements.add(new ScrollableElement(chatPrefixLabel, chatPrefixLabel, y, 10));
-                scrollableElements.add(new ScrollableElement(chatPrefixField, chatPrefixField, y + 12, 18));
-                y += 32;
-
-                // Input Type 2: Slider for Sound Volume
-                IntegerSliderWidget volumeSlider = new IntegerSliderWidget(cx - 150, y, 300, 20, "Sound Volume (%)", 0, 100, soundVolume, val -> soundVolume = val);
-                addDrawableChild(volumeSlider);
-                scrollableElements.add(new ScrollableElement(volumeSlider, volumeSlider, y, 20));
-                y += 24;
-
-                // Input Type 3: Cycle Button for Message Execute Mode
-                TextWidget execModeLabel = new TextWidget(cx - 150, y + 4, 200, 10, Text.literal("§fMessage Execute Mode"), textRenderer);
-                ButtonWidget execModeBtn = ButtonWidget.builder(Text.literal(commandExecuteMode), btn -> {
-                    commandExecuteMode = nextExecuteMode(commandExecuteMode);
-                    btn.setMessage(Text.literal(commandExecuteMode));
-                }).dimensions(cx + 60, y, 60, 20).build();
-                addDrawableChild(execModeLabel);
-                addDrawableChild(execModeBtn);
-                scrollableElements.add(new ScrollableElement(execModeLabel, execModeLabel, y, 10));
-                scrollableElements.add(new ScrollableElement(execModeBtn, execModeBtn, y, 20));
-                y += 26;
-
-            } else {
-                // Tab.GUIS
-                int y = startY;
-                var all = GuiRegistry.INSTANCE.getAll();
-                int count = all.size();
-
-                TextWidget headerWidget = new TextWidget(cx - 150, y, 300, 10,
-                        Text.literal("§7Loaded GUIs: §f" + count),
-                        textRenderer);
-                addDrawableChild(headerWidget);
-                scrollableElements.add(new ScrollableElement(headerWidget, headerWidget, y, 10));
-                y += 16;
-
-                List<java.util.Map.Entry<net.minecraft.util.Identifier, GuiDefinition>> list = new ArrayList<>(all.entrySet());
-                for (int i = 0; i < count; i++) {
-                    var entry = list.get(i);
-                    var id = entry.getKey();
-                    var def = entry.getValue();
-
-                    ButtonWidget btnWidget = ButtonWidget.builder(
-                            Text.literal("Edit: " + id.getPath() + " (" + def.getRows() + " rows)"),
-                            btn -> MinecraftClient.getInstance().setScreen(new GuiEditorScreen(this, id, def))
-                    ).dimensions(cx - 150, y, 300, 18).build();
-
-                    addDrawableChild(btnWidget);
-                    scrollableElements.add(new ScrollableElement(btnWidget, btnWidget, y, 18));
-                    y += 22;
-                }
-            }
-
-            // 4. Calculate max scroll Y
-            int maxContentY = startY;
-            for (ScrollableElement se : scrollableElements) {
-                maxContentY = Math.max(maxContentY, se.originalY + se.height);
-            }
-            int viewportHeight = (height - 35) - startY;
-            maxScrollY = Math.max(0, maxContentY - (height - 35));
-
-            if (scrollY > maxScrollY) {
-                scrollY = maxScrollY;
-            }
-
-            updateScrollPositions();
         }
 
-        private void addScrollableToggle(int cx, int y, String label, boolean initial, java.util.function.Consumer<Boolean> onChange) {
-            TextWidget labelWidget = new TextWidget(cx - 150, y + 4, 200, 10, Text.literal("§f" + label), textRenderer);
-            
+        @Override
+        public void render(DrawContext ctx, int mouseX, int mouseY, float delta) {
+            super.render(ctx, mouseX, mouseY, delta);
+            // Title
+            ctx.drawCenteredTextWithShadow(textRenderer,
+                    Text.literal("§6GUI API §7Settings"), width / 2, 10, 0xFFFFFF);
+            // Divider above buttons
+            ctx.fill(width / 2 - 150, height - 32, width / 2 + 150, height - 31, 0x44FFFFFF);
+        }
+
+        @Override
+        public void close() {
+            MinecraftClient.getInstance().setScreen(parent);
+        }
+
+        // ── Toggle helper ─────────────────────────────────────────────────────
+
+        private void addToggle(int cx, int y, String key, String label, String tooltip,
+                               boolean initial, java.util.function.Consumer<Boolean> onChange) {
+            addDrawableChild(new TextWidget(cx - 150, y + 4, 200, 10,
+                    Text.literal("§f" + label), textRenderer));
+
             ButtonWidget[] ref = new ButtonWidget[1];
             ref[0] = ButtonWidget.builder(toggleText(initial), btn -> {
                 boolean next = !btn.getMessage().getString().contains("ON");
@@ -395,89 +275,7 @@ public class GuiApiModMenuEntry implements ModMenuApi {
                 btn.setMessage(toggleText(next));
             }).dimensions(cx + 60, y, 40, 20).build();
 
-            addDrawableChild(labelWidget);
             addDrawableChild(ref[0]);
-
-            scrollableElements.add(new ScrollableElement(labelWidget, labelWidget, y, 10));
-            scrollableElements.add(new ScrollableElement(ref[0], ref[0], y, 20));
-        }
-
-        private void updateScrollPositions() {
-            int topBoundary = 44;
-            int bottomBoundary = height - 35;
-
-            for (ScrollableElement se : scrollableElements) {
-                int newY = se.originalY - (int)scrollY;
-                if (se.drawable instanceof net.minecraft.client.gui.widget.ClickableWidget widget) {
-                    widget.setY(newY);
-                    boolean inViewport = (newY + se.height > topBoundary && newY < bottomBoundary);
-                    widget.visible = inViewport;
-                    widget.active = inViewport;
-                }
-            }
-        }
-
-        @Override
-        public boolean mouseScrolled(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
-            scrollY -= verticalAmount * 12;
-            if (scrollY < 0) scrollY = 0;
-            if (scrollY > maxScrollY) scrollY = maxScrollY;
-            updateScrollPositions();
-            return true;
-        }
-
-        @Override
-        public void render(DrawContext ctx, int mouseX, int mouseY, float delta) {
-            for (ScrollableElement se : scrollableElements) {
-                if (se.drawable instanceof net.minecraft.client.gui.widget.ClickableWidget widget) {
-                    widget.visible = false;
-                }
-            }
-
-            super.render(ctx, mouseX, mouseY, delta);
-
-            int topBoundary = 44;
-            int bottomBoundary = height - 35;
-            for (ScrollableElement se : scrollableElements) {
-                int newY = se.originalY - (int)scrollY;
-                if (se.drawable instanceof net.minecraft.client.gui.widget.ClickableWidget widget) {
-                    boolean inViewport = (newY + se.height > topBoundary && newY < bottomBoundary);
-                    widget.visible = inViewport;
-                }
-            }
-
-            ctx.drawCenteredTextWithShadow(textRenderer,
-                    Text.literal("§6GUI API §7Settings"), width / 2, 8, 0xFFFFFF);
-
-            ctx.fill(width / 2 - 150, 42, width / 2 + 150, 43, 0x44FFFFFF);
-
-            ctx.enableScissor(0, topBoundary, width, bottomBoundary);
-            for (ScrollableElement se : scrollableElements) {
-                if (se.drawable instanceof net.minecraft.client.gui.widget.ClickableWidget widget) {
-                    if (widget.visible) {
-                        widget.render(ctx, mouseX, mouseY, delta);
-                    }
-                }
-            }
-            ctx.disableScissor();
-
-            if (maxScrollY > 0) {
-                int rx = width / 2 + 155;
-                int trackHeight = bottomBoundary - topBoundary;
-                int viewportHeight = trackHeight;
-                int thumbHeight = Math.max(15, (int)((double)viewportHeight / (viewportHeight + maxScrollY) * trackHeight));
-                int thumbY = topBoundary + (int)(scrollY / maxScrollY * (trackHeight - thumbHeight));
-
-                ctx.fill(rx, topBoundary, rx + 4, bottomBoundary, 0x22FFFFFF);
-                ctx.fill(rx, thumbY, rx + 4, thumbY + thumbHeight, 0x88FFFFFF);
-            }
-
-            ctx.fill(width / 2 - 150, height - 32, width / 2 + 150, height - 31, 0x44FFFFFF);
-        }
-
-        @Override
-        public void close() {
-            MinecraftClient.getInstance().setScreen(parent);
         }
 
         private static Text toggleText(boolean on) {
@@ -496,7 +294,8 @@ public class GuiApiModMenuEntry implements ModMenuApi {
             return Text.literal(color + level);
         }
     }
-        // ── GUI Editor Screen ────────────────────────────────────────────────────
+
+    // ── GUI Editor Screen ────────────────────────────────────────────────────
 
     static class GuiEditorScreen extends Screen {
         private final Screen parent;
@@ -529,10 +328,6 @@ public class GuiApiModMenuEntry implements ModMenuApi {
         public void updateFiller(Optional<GuiDefinition.FillerConfig> newFiller) {
             this.filler = newFiller;
         }
-
-
-
-
 
         @Override
         protected void init() {
@@ -612,7 +407,7 @@ public class GuiApiModMenuEntry implements ModMenuApi {
                         tickRate,
                         closeOnMove
                 );
-                MinecraftClient.getInstance().setScreen(new GuiSaveProcessScreen(parent, this, id, newDef));
+                MinecraftClient.getInstance().setScreen(new GuiSaveLoadingScreen(parent, id, newDef));
             }).dimensions(cx - 105, height - 25, 100, 20).build());
 
             // Cancel
@@ -652,96 +447,48 @@ public class GuiApiModMenuEntry implements ModMenuApi {
 
     // ── GUI Save Loading Screen (Client Feature: Persists Datapack on Disk) ──
 
-    static class GuiSaveProcessScreen extends Screen {
-        enum State {
-            CONFIRM_SAVE,
-            SAVING_PROGRESS,
-            CONFIRM_RELOAD,
-            RELOADING_SPINNER
-        }
-
-        private final Screen settingsScreen;
-        private final Screen editorScreen;
+    static class GuiSaveLoadingScreen extends Screen {
+        private final Screen parent;
         private final net.minecraft.util.Identifier id;
         private final GuiDefinition newDef;
-
-        private State state = State.CONFIRM_SAVE;
         private int ticksElapsed = 0;
 
-        GuiSaveProcessScreen(Screen settingsScreen, Screen editorScreen, net.minecraft.util.Identifier id, GuiDefinition newDef) {
-            super(Text.literal("Save Progress"));
-            this.settingsScreen = settingsScreen;
-            this.editorScreen = editorScreen;
+        GuiSaveLoadingScreen(Screen parent, net.minecraft.util.Identifier id, GuiDefinition newDef) {
+            super(Text.literal("Saving GUI..."));
+            this.parent = parent;
             this.id = id;
             this.newDef = newDef;
         }
 
         @Override
         protected void init() {
-            this.clearChildren();
             ticksElapsed = 0;
-
-            int cx = width / 2;
-            int cy = height / 2;
-
-            if (state == State.CONFIRM_SAVE) {
-                addDrawableChild(ButtonWidget.builder(Text.literal("Yes, Save Changes"), btn -> {
-                    state = State.SAVING_PROGRESS;
-                    this.init();
-                }).dimensions(cx - 110, cy + 20, 100, 20).build());
-
-                addDrawableChild(ButtonWidget.builder(Text.literal("No, Back"), btn -> {
-                    MinecraftClient.getInstance().setScreen(editorScreen);
-                }).dimensions(cx + 10, cy + 20, 100, 20).build());
-            } else if (state == State.CONFIRM_RELOAD) {
-                addDrawableChild(ButtonWidget.builder(Text.literal("Yes, Reload"), btn -> {
-                    if (MinecraftClient.getInstance().player != null) {
-                        MinecraftClient.getInstance().player.networkHandler.sendChatCommand("guiapi reload");
-                    }
-                    state = State.RELOADING_SPINNER;
-                    this.init();
-                }).dimensions(cx - 110, cy + 20, 100, 20).build());
-
-                addDrawableChild(ButtonWidget.builder(Text.literal("No, Skip"), btn -> {
-                    MinecraftClient.getInstance().setScreen(settingsScreen);
-                }).dimensions(cx + 10, cy + 20, 100, 20).build());
-            }
         }
 
         @Override
         public void tick() {
-            if (state == State.SAVING_PROGRESS) {
-                ticksElapsed++;
-                if (ticksElapsed >= 40) {
-                    MinecraftServer server = MinecraftClient.getInstance().getServer();
-                    if (server != null) {
-                        dev.toolkitmc.guiapi.loader.GuiRegistry.INSTANCE.put(id, newDef);
-                        dev.toolkitmc.guiapi.loader.GuiRegistry.INSTANCE.saveToDisk(server, id, newDef);
-                    }
-                    state = State.CONFIRM_RELOAD;
-                    this.init();
-                }
-            } else if (state == State.RELOADING_SPINNER) {
-                ticksElapsed++;
-                if (ticksElapsed >= 30) {
-                    MinecraftClient.getInstance().setScreen(settingsScreen);
-                }
-            }
-        }
+            ticksElapsed++;
+            if (ticksElapsed == 40) { // After 2 seconds, write to disk and trigger reload
+                MinecraftServer server = MinecraftClient.getInstance().getServer();
+                if (server != null) {
+                    // 1. Update in-memory
+                    dev.toolkitmc.guiapi.loader.GuiRegistry.INSTANCE.put(id, newDef);
+                    // 2. Save directly to the datapack JSON file on disk
+                    dev.toolkitmc.guiapi.loader.GuiRegistry.INSTANCE.saveToDisk(server, id, newDef);
 
-        @Override
-        public void renderBackground(DrawContext context, int mouseX, int mouseY, float delta) {
-            // Safe No-Op: Bypasses vanilla background blur completely to avoid "Can only blur once per frame" IllegalStateException crash!
+                    // 3. Reload datapacks so everything syncs perfectly
+                    if (MinecraftClient.getInstance().player != null) {
+                        MinecraftClient.getInstance().player.networkHandler.sendChatCommand("guiapi reload");
+                    }
+                }
+            } else if (ticksElapsed >= 55) { // Return to settings screen
+                MinecraftClient.getInstance().setScreen(parent);
+            }
         }
 
         @Override
         public void render(DrawContext ctx, int mouseX, int mouseY, float delta) {
-            // Draw a highly professional solid opaque dark background manually
-            ctx.fill(0, 0, width, height, 0xFF0A0A0A);
-
-            if (state == State.CONFIRM_SAVE || state == State.CONFIRM_RELOAD) {
-                super.render(ctx, mouseX, mouseY, delta);
-            }
+            super.render(ctx, mouseX, mouseY, delta);
 
             int cx = width / 2;
             int cy = height / 2;
@@ -749,53 +496,28 @@ public class GuiApiModMenuEntry implements ModMenuApi {
             long time = System.currentTimeMillis();
             int rainbowColor = java.awt.Color.HSBtoRGB((time % 1500) / 1500f, 0.8f, 0.8f);
 
-            switch (state) {
-                case CONFIRM_SAVE -> {
-                    ctx.drawCenteredTextWithShadow(textRenderer, Text.literal("§6★ Save Confirmation ★"), cx, cy - 30, 0xFFFFFF);
-                    ctx.drawCenteredTextWithShadow(textRenderer, Text.literal("§fAre you sure you want to write changes to disk?"), cx, cy - 10, 0xAAAAAA);
-                }
-                case SAVING_PROGRESS -> {
-                    String status = "Locating Datapack Folder...";
-                    if (ticksElapsed >= 20) {
-                        status = "Overwriting Datapack JSON File...";
-                    }
-                    ctx.drawCenteredTextWithShadow(textRenderer, Text.literal("§6★ Writing Datapack ★"), cx, cy - 40, 0xFFFFFF);
-                    ctx.drawCenteredTextWithShadow(textRenderer, Text.literal(status), cx, cy - 10, rainbowColor);
+            // Draw a solid professional background
+            ctx.fill(0, 0, width, height, 0xDD050505);
 
-                    int barWidth = 160;
-                    int progress = Math.min(barWidth, (ticksElapsed * barWidth) / 40);
-                    ctx.fill(cx - barWidth / 2, cy + 15, cx + barWidth / 2, cy + 19, 0x44FFFFFF);
-                    ctx.fill(cx - barWidth / 2, cy + 15, cx - barWidth / 2 + progress, cy + 19, rainbowColor);
-                }
-                case CONFIRM_RELOAD -> {
-                    ctx.drawCenteredTextWithShadow(textRenderer, Text.literal("§6★ Save Complete! ★"), cx, cy - 30, 0xFFFFFF);
-                    ctx.drawCenteredTextWithShadow(textRenderer, Text.literal("§fDo you want to reload GUIs now to sync in-game?"), cx, cy - 10, 0xAAAAAA);
-                }
-                case RELOADING_SPINNER -> {
-                    ctx.drawCenteredTextWithShadow(textRenderer, Text.literal("§6★ Reloading Resources ★"), cx, cy - 40, 0xFFFFFF);
-                    ctx.drawCenteredTextWithShadow(textRenderer, Text.literal("Please wait, reloading..."), cx, cy - 15, 0x88FFFFFF);
-
-                    double angleSpeed = (time % 1000) / 1000.0 * 2.0 * Math.PI;
-                    int numDots = 8;
-                    int radius = 12;
-                    for (int i = 0; i < numDots; i++) {
-                        double angle = angleSpeed + (i * 2.0 * Math.PI / numDots);
-                        int dotX = cx + (int)(radius * Math.cos(angle));
-                        int dotY = cy + 15 + (int)(radius * Math.sin(angle));
-                        
-                        int alpha = (int)(255 * ((double)i / numDots));
-                        int color = (alpha << 24) | (0xFFFFFF & rainbowColor);
-                        ctx.fill(dotX - 2, dotY - 2, dotX + 2, dotY + 2, color);
-                    }
-
-                    String[] spinner = {"|", "/", "-", "\\"};
-                    String spinChar = spinner[(ticksElapsed / 3) % 4];
-                    ctx.drawCenteredTextWithShadow(textRenderer, Text.literal("§e" + spinChar), cx, cy + 35, 0xFFFFFF);
-                }
+            String status = "Locating Datapack Folder...";
+            if (ticksElapsed >= 20 && ticksElapsed < 40) {
+                status = "Overwriting Datapack JSON File...";
+            } else if (ticksElapsed >= 40) {
+                status = "Reloading GUI API Resources...";
             }
+
+            ctx.drawCenteredTextWithShadow(textRenderer, Text.literal("§6★ GUI API Datapack Writer ★"), cx, cy - 40, 0xFFFFFF);
+            ctx.drawCenteredTextWithShadow(textRenderer, Text.literal(status), cx, cy - 10, rainbowColor);
+
+            // Draw progress bar
+            int barWidth = 160;
+            int progress = Math.min(barWidth, (ticksElapsed * barWidth) / 55);
+            ctx.fill(cx - barWidth / 2, cy + 15, cx + barWidth / 2, cy + 19, 0x44FFFFFF);
+            ctx.fill(cx - barWidth / 2, cy + 15, cx - barWidth / 2 + progress, cy + 19, rainbowColor);
         }
     }
-        // ── Filler Editor Screen ─────────────────────────────────────────────────
+
+    // ── Filler Editor Screen ─────────────────────────────────────────────────
 
     static class FillerEditorScreen extends Screen {
         private final GuiEditorScreen parent;
@@ -819,10 +541,6 @@ public class GuiApiModMenuEntry implements ModMenuApi {
             this.glint = fill.glint();
             this.hideTooltip = fill.hideTooltip();
         }
-
-
-
-
 
         @Override
         protected void init() {
@@ -937,10 +655,6 @@ public class GuiApiModMenuEntry implements ModMenuApi {
             this.buttonsList = new ArrayList<>(parent.buttons);
         }
 
-
-
-
-
         @Override
         protected void init() {
             int cx = width / 2;
@@ -1018,124 +732,128 @@ public class GuiApiModMenuEntry implements ModMenuApi {
     // ── Button Properties Editor Screen ──────────────────────────────────────
 
     static class ButtonEditorScreen extends Screen {
-        private enum Tab {
-            BASIC, APPEARANCE, LOGIC
-        }
-
         private final ButtonListScreen parent;
         private final int index;
         private final GuiDefinition.Button btn;
 
-        private Tab currentTab = Tab.BASIC;
-
+        private TextFieldWidget slotField;
         private TextFieldWidget itemField;
         private TextFieldWidget nameField;
-        private TextFieldWidget loreField; 
+        private TextFieldWidget amountField;
+        private TextFieldWidget loreField; // Combined Lore input field (separated by ;)
+
+        // Combined Actions input field (separated by ;)
         private TextFieldWidget actionsField;
-        private TextFieldWidget conditionField;
 
-        private int slot;
-        private int amount;
-        private int pageVal;
         private boolean glint;
-        private GuiDefinition.ClickType clickType;
         private Optional<GuiDefinition.ToggleDefinition> toggle;
-
-        // Caching fields to fix wipe-on-tab-switch bug!
-        private String itemText;
-        private String nameText;
-        private String loreText;
-        private String actionsText;
-        private String conditionText;
 
         ButtonEditorScreen(ButtonListScreen parent, int index, GuiDefinition.Button btn) {
             super(Text.literal("Edit Button"));
             this.parent = parent;
             this.index = index;
             this.btn = btn;
-            this.slot = btn.slot();
-            this.pageVal = btn.page();
             this.glint = btn.glint();
             this.toggle = btn.toggle();
-            this.clickType = btn.clickType();
-
-            int parsedAmount = 1;
-            try {
-                parsedAmount = Integer.parseInt(btn.amount());
-            } catch (NumberFormatException ignored) {}
-            this.amount = parsedAmount;
-
-            // Load initial texts
-            this.itemText = btn.item();
-            this.nameText = btn.name();
-            this.loreText = String.join(";", btn.lore());
-            this.actionsText = serializeActionsToString(btn.actions());
-            this.conditionText = btn.condition().isPresent() ? btn.condition().get().type().name().toLowerCase() + ":" + btn.condition().get().value() : "";
         }
 
         public void updateToggle(Optional<GuiDefinition.ToggleDefinition> newToggle) {
             this.toggle = newToggle;
         }
 
-        private static GuiDefinition.ClickType nextClickType(GuiDefinition.ClickType current) {
-            GuiDefinition.ClickType[] vals = GuiDefinition.ClickType.values();
-            return vals[(current.ordinal() + 1) % vals.length];
-        }
-
-        private void saveCurrentTabFields() {
-            if (itemField != null) itemText = itemField.getText();
-            if (nameField != null) nameText = nameField.getText();
-            if (loreField != null) loreText = loreField.getText();
-            if (actionsField != null) actionsText = actionsField.getText();
-            if (conditionField != null) conditionText = conditionField.getText();
-        }
-
         @Override
         protected void init() {
             int cx = width / 2;
-            this.clearChildren();
+            int y = 25;
 
-            // 1. Add Tab buttons
-            ButtonWidget basicTabBtn = ButtonWidget.builder(Text.literal(currentTab == Tab.BASIC ? "§aBasic" : "§7Basic"), btn -> {
-                saveCurrentTabFields();
-                currentTab = Tab.BASIC;
-                this.init();
-            }).dimensions(cx - 125, 22, 80, 18).build();
-            basicTabBtn.active = (currentTab != Tab.BASIC);
-            addDrawableChild(basicTabBtn);
+            // Slot Input
+            addDrawableChild(new TextWidget(cx - 150, y, 100, 10, Text.literal("§eSlot (0-53)"), textRenderer));
+            slotField = new TextFieldWidget(textRenderer, cx - 150, y + 12, 60, 18, Text.literal("Slot"));
+            slotField.setText(String.valueOf(btn.slot()));
+            addDrawableChild(slotField);
 
-            ButtonWidget appTabBtn = ButtonWidget.builder(Text.literal(currentTab == Tab.APPEARANCE ? "§aAppearance" : "§7Appearance"), btn -> {
-                saveCurrentTabFields();
-                currentTab = Tab.APPEARANCE;
-                this.init();
-            }).dimensions(cx - 40, 22, 80, 18).build();
-            appTabBtn.active = (currentTab != Tab.APPEARANCE);
-            addDrawableChild(appTabBtn);
+            // Amount Input
+            addDrawableChild(new TextWidget(cx - 80, y, 100, 10, Text.literal("§eAmount"), textRenderer));
+            amountField = new TextFieldWidget(textRenderer, cx - 80, y + 12, 60, 18, Text.literal("Amount"));
+            amountField.setText(btn.amount());
+            addDrawableChild(amountField);
 
-            ButtonWidget logicTabBtn = ButtonWidget.builder(Text.literal(currentTab == Tab.LOGIC ? "§aLogic" : "§7Logic"), btn -> {
-                saveCurrentTabFields();
-                currentTab = Tab.LOGIC;
-                this.init();
-            }).dimensions(cx + 45, 22, 80, 18).build();
-            logicTabBtn.active = (currentTab != Tab.LOGIC);
-            addDrawableChild(logicTabBtn);
+            // Glint Toggle
+            addDrawableChild(new TextWidget(cx - 10, y, 100, 10, Text.literal("§eGlint"), textRenderer));
+            ButtonWidget[] glintBtnRef = new ButtonWidget[1];
+            glintBtnRef[0] = ButtonWidget.builder(toggleText(glint), b -> {
+                glint = !glint;
+                b.setMessage(toggleText(glint));
+            }).dimensions(cx - 10, y + 12, 40, 18).build();
+            addDrawableChild(glintBtnRef[0]);
 
-            // 2. Add bottom buttons
+            // Edit Toggle Properties Navigation
+            addDrawableChild(new TextWidget(cx + 40, y, 110, 10, Text.literal("§eToggle Button"), textRenderer));
+            ButtonWidget[] toggleBtnRef = new ButtonWidget[1];
+            toggleBtnRef[0] = ButtonWidget.builder(Text.literal(toggle.isPresent() ? "§aCONFIGURED" : "§cDISABLED"), b -> {
+                MinecraftClient.getInstance().setScreen(new ToggleEditorScreen(this, toggle));
+            }).dimensions(cx + 40, y + 12, 110, 18).build();
+            addDrawableChild(toggleBtnRef[0]);
+            y += 38;
+
+            // Item ID Input
+            addDrawableChild(new TextWidget(cx - 150, y, 300, 10, Text.literal("§eItem ID"), textRenderer));
+            y += 12;
+            itemField = new TextFieldWidget(textRenderer, cx - 150, y, 300, 18, Text.literal("Item ID"));
+            itemField.setMaxLength(256);
+            itemField.setText(btn.item());
+            addDrawableChild(itemField);
+            y += 24;
+
+            // Display Name Input
+            addDrawableChild(new TextWidget(cx - 150, y, 300, 10, Text.literal("§eDisplay Name"), textRenderer));
+            y += 12;
+            nameField = new TextFieldWidget(textRenderer, cx - 150, y, 300, 18, Text.literal("Display Name"));
+            nameField.setMaxLength(128);
+            nameField.setText(btn.name());
+            addDrawableChild(nameField);
+            y += 24;
+
+            // Lore Input (joined by ;)
+            addDrawableChild(new TextWidget(cx - 150, y, 300, 10, Text.literal("§eLore Lines (Separate by semicolon ';')"), textRenderer));
+            y += 12;
+            loreField = new TextFieldWidget(textRenderer, cx - 150, y, 300, 18, Text.literal("Lore"));
+            loreField.setMaxLength(512);
+            loreField.setText(String.join(";", btn.lore()));
+            addDrawableChild(loreField);
+            y += 24;
+
+            // Multiple Actions Input (joined by ;)
+            addDrawableChild(new TextWidget(cx - 150, y, 300, 10, Text.literal("§eActions (Format: 'type:value' or 'type:varKey:value', separate by ';')"), textRenderer));
+            y += 12;
+            actionsField = new TextFieldWidget(textRenderer, cx - 150, y, 300, 18, Text.literal("Actions"));
+            actionsField.setMaxLength(512);
+            actionsField.setText(serializeActionsToString(btn.actions()));
+            addDrawableChild(actionsField);
+            y += 32;
+
+            // Actions
+            // Save/Apply
             addDrawableChild(ButtonWidget.builder(Text.literal("Apply"), b -> {
-                saveCurrentTabFields();
+                int slotVal = 0;
+                try {
+                    slotVal = Math.max(0, Integer.parseInt(slotField.getText()));
+                } catch (NumberFormatException ignored) {}
 
                 // Build Lore list
                 List<String> finalLore = new ArrayList<>();
-                if (!loreText.isEmpty()) {
-                    for (String s : loreText.split(";")) {
+                String loreTxt = loreField.getText();
+                if (!loreTxt.isEmpty()) {
+                    for (String s : loreTxt.split(";")) {
                         finalLore.add(s);
                     }
                 }
 
                 // Build Actions list from semicolon-separated string
                 List<GuiDefinition.ButtonAction> finalActions = new ArrayList<>();
-                if (!actionsText.isEmpty()) {
-                    for (String s : actionsText.split(";")) {
+                String actionsTxt = actionsField.getText();
+                if (!actionsTxt.isEmpty()) {
+                    for (String s : actionsTxt.split(";")) {
                         finalActions.add(parseActionFromString(s));
                     }
                 }
@@ -1143,32 +861,20 @@ public class GuiApiModMenuEntry implements ModMenuApi {
                     finalActions.add(new GuiDefinition.ButtonAction(GuiDefinition.ActionType.CLOSE, ""));
                 }
 
-                // Build Condition
-                Optional<GuiDefinition.ButtonCondition> finalCondition = Optional.empty();
-                if (!conditionText.isEmpty()) {
-                    String[] condParts = conditionText.split(":", 2);
-                    if (condParts.length == 2) {
-                        try {
-                            GuiDefinition.ConditionType ct = GuiDefinition.ConditionType.fromString(condParts[0]);
-                            finalCondition = Optional.of(new GuiDefinition.ButtonCondition(ct, condParts[1]));
-                        } catch (Exception ignored) {}
-                    }
-                }
-
                 GuiDefinition.Button newBtn = new GuiDefinition.Button(
-                        slot,
-                        pageVal,
-                        itemText,
-                        nameText,
+                        slotVal,
+                        btn.page(),
+                        itemField.getText(),
+                        nameField.getText(),
                         finalLore,
                         glint,
-                        clickType,
-                        finalCondition,
+                        btn.clickType(),
+                        btn.condition(),
                         finalActions,
                         toggle,
                         btn.customModelData(),
                         btn.itemModel(),
-                        String.valueOf(amount),
+                        amountField.getText(),
                         btn.hideTooltip(),
                         btn.hideAdditionalTooltip()
                 );
@@ -1176,121 +882,34 @@ public class GuiApiModMenuEntry implements ModMenuApi {
                 MinecraftClient.getInstance().setScreen(parent);
             }).dimensions(cx - 155, height - 25, 100, 20).build());
 
+            // Delete Button
             addDrawableChild(ButtonWidget.builder(Text.literal("§cDelete Button"), b -> {
                 parent.deleteButton(index);
                 MinecraftClient.getInstance().setScreen(parent);
             }).dimensions(cx - 50, height - 25, 100, 20).build());
 
+            // Cancel
             addDrawableChild(ButtonWidget.builder(Text.literal("Cancel"), b ->
                     MinecraftClient.getInstance().setScreen(parent))
                     .dimensions(cx + 55, height - 25, 100, 20).build());
-
-            // 3. Tab Specific Inputs
-            int startY = 48;
-            if (currentTab == Tab.BASIC) {
-                int y = startY;
-
-                // Page selection slider (Page 1-10)
-                IntegerSliderWidget pageSlider = new IntegerSliderWidget(cx - 150, y, 300, 20, "Page (1-10)", 0, 9, pageVal, val -> pageVal = val);
-                addDrawableChild(pageSlider);
-                y += 24;
-
-                // Slot selection slider (Slot 0-53)
-                IntegerSliderWidget slotSlider = new IntegerSliderWidget(cx - 150, y, 300, 20, "Slot Position", 0, 53, slot, val -> slot = val);
-                addDrawableChild(slotSlider);
-                y += 24;
-
-                // Amount selection slider (Amount 1-99)
-                IntegerSliderWidget amountSlider = new IntegerSliderWidget(cx - 150, y, 300, 20, "Amount", 1, 99, amount, val -> amount = val);
-                addDrawableChild(amountSlider);
-                y += 24;
-
-                // Item ID Input (Text Field)
-                addDrawableChild(new TextWidget(cx - 150, y, 300, 10, Text.literal("§eItem ID"), textRenderer));
-                itemField = new TextFieldWidget(textRenderer, cx - 150, y + 12, 300, 18, Text.literal("Item ID"));
-                itemField.setMaxLength(256);
-                itemField.setText(itemText);
-                addDrawableChild(itemField);
-                y += 34;
-
-                // Display Name Input (Text Field)
-                addDrawableChild(new TextWidget(cx - 150, y, 300, 10, Text.literal("§eDisplay Name"), textRenderer));
-                nameField = new TextFieldWidget(textRenderer, cx - 150, y + 12, 300, 18, Text.literal("Display Name"));
-                nameField.setMaxLength(128);
-                nameField.setText(nameText);
-                addDrawableChild(nameField);
-
-            } else if (currentTab == Tab.APPEARANCE) {
-                int y = startY;
-
-                // Glint Toggle
-                addDrawableChild(new TextWidget(cx - 150, y + 4, 200, 10, Text.literal("§eEnable Glint"), textRenderer));
-                ButtonWidget glintBtn = ButtonWidget.builder(toggleText(glint), b -> {
-                    glint = !glint;
-                    b.setMessage(toggleText(glint));
-                }).dimensions(cx + 60, y, 40, 18).build();
-                addDrawableChild(glintBtn);
-                y += 24;
-
-                // Toggle Button Navigation
-                addDrawableChild(new TextWidget(cx - 150, y + 4, 200, 10, Text.literal("§eToggle Properties"), textRenderer));
-                ButtonWidget toggleBtn = ButtonWidget.builder(Text.literal(toggle.isPresent() ? "§aCONFIGURED" : "§cDISABLED"), b -> {
-                    MinecraftClient.getInstance().setScreen(new ToggleEditorScreen(this, toggle));
-                }).dimensions(cx + 40, y, 110, 18).build();
-                addDrawableChild(toggleBtn);
-                y += 26;
-
-                // Lore Input
-                addDrawableChild(new TextWidget(cx - 150, y, 300, 10, Text.literal("§eLore Lines (Separate by semicolon ';')"), textRenderer));
-                loreField = new TextFieldWidget(textRenderer, cx - 150, y + 12, 300, 18, Text.literal("Lore"));
-                loreField.setMaxLength(512);
-                loreField.setText(loreText);
-                addDrawableChild(loreField);
-
-            } else if (currentTab == Tab.LOGIC) {
-                int y = startY;
-
-                // Click Type
-                addDrawableChild(new TextWidget(cx - 150, y + 4, 200, 10, Text.literal("§eClick Type"), textRenderer));
-                ButtonWidget clickTypeBtn = ButtonWidget.builder(Text.literal(clickType.name()), b -> {
-                    clickType = nextClickType(clickType);
-                    b.setMessage(Text.literal(clickType.name()));
-                }).dimensions(cx + 60, y, 60, 18).build();
-                addDrawableChild(clickTypeBtn);
-                y += 24;
-
-                // Condition
-                addDrawableChild(new TextWidget(cx - 150, y, 300, 10, Text.literal("§eCondition"), textRenderer));
-                conditionField = new TextFieldWidget(textRenderer, cx - 150, y + 12, 300, 18, Text.literal("Condition"));
-                conditionField.setMaxLength(128);
-                conditionField.setText(conditionText);
-                addDrawableChild(conditionField);
-                y += 34;
-
-                // Actions
-                addDrawableChild(new TextWidget(cx - 150, y, 300, 10, Text.literal("§eActions (Separate by semicolon ';')"), textRenderer));
-                actionsField = new TextFieldWidget(textRenderer, cx - 150, y + 12, 300, 18, Text.literal("Actions"));
-                actionsField.setMaxLength(512);
-                actionsField.setText(actionsText);
-                addDrawableChild(actionsField);
-            }
         }
 
         @Override
         public void render(DrawContext ctx, int mouseX, int mouseY, float delta) {
             super.render(ctx, mouseX, mouseY, delta);
             ctx.drawCenteredTextWithShadow(textRenderer,
-                    Text.literal("§6Edit Button Properties"), width / 2, 8, 0xFFFFFF);
+                    Text.literal("§6Edit Button Properties"), width / 2, 10, 0xFFFFFF);
             ctx.fill(width / 2 - 150, height - 32, width / 2 + 150, height - 31, 0x44FFFFFF);
         }
 
         @Override
         public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
-            if ((itemField != null && itemField.keyPressed(keyCode, scanCode, modifiers)) ||
-                (nameField != null && nameField.keyPressed(keyCode, scanCode, modifiers)) ||
-                (conditionField != null && conditionField.keyPressed(keyCode, scanCode, modifiers)) ||
-                (loreField != null && loreField.keyPressed(keyCode, scanCode, modifiers)) ||
-                (actionsField != null && actionsField.keyPressed(keyCode, scanCode, modifiers))) {
+            if (slotField.keyPressed(keyCode, scanCode, modifiers) ||
+                    amountField.keyPressed(keyCode, scanCode, modifiers) ||
+                    itemField.keyPressed(keyCode, scanCode, modifiers) ||
+                    nameField.keyPressed(keyCode, scanCode, modifiers) ||
+                    loreField.keyPressed(keyCode, scanCode, modifiers) ||
+                    actionsField.keyPressed(keyCode, scanCode, modifiers)) {
                 return true;
             }
             return super.keyPressed(keyCode, scanCode, modifiers);
@@ -1298,11 +917,12 @@ public class GuiApiModMenuEntry implements ModMenuApi {
 
         @Override
         public boolean charTyped(char chr, int modifiers) {
-            if ((itemField != null && itemField.charTyped(chr, modifiers)) ||
-                (nameField != null && nameField.charTyped(chr, modifiers)) ||
-                (conditionField != null && conditionField.charTyped(chr, modifiers)) ||
-                (loreField != null && loreField.charTyped(chr, modifiers)) ||
-                (actionsField != null && actionsField.charTyped(chr, modifiers))) {
+            if (slotField.charTyped(chr, modifiers) ||
+                    amountField.charTyped(chr, modifiers) ||
+                    itemField.charTyped(chr, modifiers) ||
+                    nameField.charTyped(chr, modifiers) ||
+                    loreField.charTyped(chr, modifiers) ||
+                    actionsField.charTyped(chr, modifiers)) {
                 return true;
             }
             return super.charTyped(chr, modifiers);
@@ -1312,7 +932,8 @@ public class GuiApiModMenuEntry implements ModMenuApi {
             return on ? Text.literal("§aON") : Text.literal("§cOFF");
         }
     }
-        // ── Toggle Editor Screen ─────────────────────────────────────────────────
+
+    // ── Toggle Editor Screen ─────────────────────────────────────────────────
 
     static class ToggleEditorScreen extends Screen {
         private final ButtonEditorScreen parent;
@@ -1331,10 +952,6 @@ public class GuiApiModMenuEntry implements ModMenuApi {
             this.parent = parent;
             this.currentToggle = currentToggle;
         }
-
-
-
-
 
         @Override
         protected void init() {
