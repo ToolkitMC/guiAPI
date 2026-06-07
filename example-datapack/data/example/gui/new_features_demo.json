@@ -79,7 +79,7 @@
     {
       "slot": 14,
       "item": "minecraft:gold_block",
-      "name": "§e5. Scoreboard & ActionBar Desteği",
+      "name": "§e5. Scoreboard & ActionBar Support",
       "lore": [
         "§7Directly modifies your scoreboard!",
         "§7Left-Click: §a+10 Coins",
@@ -97,7 +97,7 @@
     {
       "slot": 14,
       "item": "minecraft:gold_block",
-      "name": "§e5. Scoreboard & ActionBar Desteği",
+      "name": "§e5. Scoreboard & ActionBar Support",
       "lore": [
         "§7Directly modifies your scoreboard!",
         "§7Left-Click: §a+10 Coins",
@@ -185,7 +185,7 @@
       "item": "minecraft:book",
       "name": "§b3. Multi-Value Custom Model Data",
       "lore": [
-        "§7Gelişmiş 1.21.4+ floats/flags/strings/colors"
+        "§7Advanced 1.21.4+ floats/flags/strings/colors"
       ],
       "custom_model_data": {
         "floats": [42.5],
