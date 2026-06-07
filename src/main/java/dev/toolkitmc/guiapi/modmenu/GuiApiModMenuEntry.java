@@ -642,7 +642,7 @@ public class GuiApiModMenuEntry implements ModMenuApi {
                         tickRate,
                         closeOnMove
                 );
-                MinecraftClient.getInstance().setScreen(new GuiSaveLoadingScreen(parent, id, newDef));
+                MinecraftClient.getInstance().setScreen(new GuiSaveProcessScreen(parent, this, id, newDef));
             }).dimensions(cx - 105, height - 25, 100, 20).build());
 
             // Cancel
@@ -682,52 +682,87 @@ public class GuiApiModMenuEntry implements ModMenuApi {
 
     // ── GUI Save Loading Screen (Client Feature: Persists Datapack on Disk) ──
 
-    static class GuiSaveLoadingScreen extends Screen {
-        private final Screen parent;
+    static class GuiSaveProcessScreen extends Screen {
+        enum State {
+            CONFIRM_SAVE,
+            SAVING_PROGRESS,
+            CONFIRM_RELOAD,
+            RELOADING_SPINNER
+        }
+
+        private final Screen settingsScreen;
+        private final Screen editorScreen;
         private final net.minecraft.util.Identifier id;
         private final GuiDefinition newDef;
+
+        private State state = State.CONFIRM_SAVE;
         private int ticksElapsed = 0;
 
-        GuiSaveLoadingScreen(Screen parent, net.minecraft.util.Identifier id, GuiDefinition newDef) {
-            super(Text.literal("Saving GUI..."));
-            this.parent = parent;
+        GuiSaveProcessScreen(Screen settingsScreen, Screen editorScreen, net.minecraft.util.Identifier id, GuiDefinition newDef) {
+            super(Text.literal("Save Progress"));
+            this.settingsScreen = settingsScreen;
+            this.editorScreen = editorScreen;
             this.id = id;
             this.newDef = newDef;
         }
 
-
-
-
-
         @Override
         protected void init() {
+            this.clearChildren();
             ticksElapsed = 0;
+
+            int cx = width / 2;
+            int cy = height / 2;
+
+            if (state == State.CONFIRM_SAVE) {
+                addDrawableChild(ButtonWidget.builder(Text.literal("Yes, Save Changes"), btn -> {
+                    state = State.SAVING_PROGRESS;
+                    this.init();
+                }).dimensions(cx - 110, cy + 20, 100, 20).build());
+
+                addDrawableChild(ButtonWidget.builder(Text.literal("No, Back"), btn -> {
+                    MinecraftClient.getInstance().setScreen(editorScreen);
+                }).dimensions(cx + 10, cy + 20, 100, 20).build());
+            } else if (state == State.CONFIRM_RELOAD) {
+                addDrawableChild(ButtonWidget.builder(Text.literal("Yes, Reload"), btn -> {
+                    if (MinecraftClient.getInstance().player != null) {
+                        MinecraftClient.getInstance().player.networkHandler.sendChatCommand("guiapi reload");
+                    }
+                    state = State.RELOADING_SPINNER;
+                    this.init();
+                }).dimensions(cx - 110, cy + 20, 100, 20).build());
+
+                addDrawableChild(ButtonWidget.builder(Text.literal("No, Skip"), btn -> {
+                    MinecraftClient.getInstance().setScreen(settingsScreen);
+                }).dimensions(cx + 10, cy + 20, 100, 20).build());
+            }
         }
 
         @Override
         public void tick() {
-            ticksElapsed++;
-            if (ticksElapsed == 40) { // After 2 seconds, write to disk and trigger reload
-                MinecraftServer server = MinecraftClient.getInstance().getServer();
-                if (server != null) {
-                    // 1. Update in-memory
-                    dev.toolkitmc.guiapi.loader.GuiRegistry.INSTANCE.put(id, newDef);
-                    // 2. Save directly to the datapack JSON file on disk
-                    dev.toolkitmc.guiapi.loader.GuiRegistry.INSTANCE.saveToDisk(server, id, newDef);
-
-                    // 3. Reload datapacks so everything syncs perfectly
-                    if (MinecraftClient.getInstance().player != null) {
-                        MinecraftClient.getInstance().player.networkHandler.sendChatCommand("guiapi reload");
+            if (state == State.SAVING_PROGRESS) {
+                ticksElapsed++;
+                if (ticksElapsed >= 40) {
+                    MinecraftServer server = MinecraftClient.getInstance().getServer();
+                    if (server != null) {
+                        dev.toolkitmc.guiapi.loader.GuiRegistry.INSTANCE.put(id, newDef);
+                        dev.toolkitmc.guiapi.loader.GuiRegistry.INSTANCE.saveToDisk(server, id, newDef);
                     }
+                    state = State.CONFIRM_RELOAD;
+                    this.init();
                 }
-            } else if (ticksElapsed >= 55) { // Return to settings screen
-                MinecraftClient.getInstance().setScreen(parent);
+            } else if (state == State.RELOADING_SPINNER) {
+                ticksElapsed++;
+                if (ticksElapsed >= 30) {
+                    MinecraftClient.getInstance().setScreen(settingsScreen);
+                }
             }
         }
 
         @Override
         public void render(DrawContext ctx, int mouseX, int mouseY, float delta) {
-            super.render(ctx, mouseX, mouseY, delta);
+            this.renderBackground(ctx, mouseX, mouseY, delta);
+            ctx.fill(0, 0, width, height, 0xDD050505);
 
             int cx = width / 2;
             int cy = height / 2;
@@ -735,28 +770,55 @@ public class GuiApiModMenuEntry implements ModMenuApi {
             long time = System.currentTimeMillis();
             int rainbowColor = java.awt.Color.HSBtoRGB((time % 1500) / 1500f, 0.8f, 0.8f);
 
-            // Draw a solid professional background
-            ctx.fill(0, 0, width, height, 0xDD050505);
+            switch (state) {
+                case CONFIRM_SAVE -> {
+                    ctx.drawCenteredTextWithShadow(textRenderer, Text.literal("§6★ Save Confirmation ★"), cx, cy - 30, 0xFFFFFF);
+                    ctx.drawCenteredTextWithShadow(textRenderer, Text.literal("§fAre you sure you want to write changes to disk?"), cx, cy - 10, 0xAAAAAA);
+                    super.render(ctx, mouseX, mouseY, delta);
+                }
+                case SAVING_PROGRESS -> {
+                    String status = "Locating Datapack Folder...";
+                    if (ticksElapsed >= 20) {
+                        status = "Overwriting Datapack JSON File...";
+                    }
+                    ctx.drawCenteredTextWithShadow(textRenderer, Text.literal("§6★ Writing Datapack ★"), cx, cy - 40, 0xFFFFFF);
+                    ctx.drawCenteredTextWithShadow(textRenderer, Text.literal(status), cx, cy - 10, rainbowColor);
 
-            String status = "Locating Datapack Folder...";
-            if (ticksElapsed >= 20 && ticksElapsed < 40) {
-                status = "Overwriting Datapack JSON File...";
-            } else if (ticksElapsed >= 40) {
-                status = "Reloading GUI API Resources...";
+                    int barWidth = 160;
+                    int progress = Math.min(barWidth, (ticksElapsed * barWidth) / 40);
+                    ctx.fill(cx - barWidth / 2, cy + 15, cx + barWidth / 2, cy + 19, 0x44FFFFFF);
+                    ctx.fill(cx - barWidth / 2, cy + 15, cx - barWidth / 2 + progress, cy + 19, rainbowColor);
+                }
+                case CONFIRM_RELOAD -> {
+                    ctx.drawCenteredTextWithShadow(textRenderer, Text.literal("§6★ Save Complete! ★"), cx, cy - 30, 0xFFFFFF);
+                    ctx.drawCenteredTextWithShadow(textRenderer, Text.literal("§fDo you want to reload GUIs now to sync in-game?"), cx, cy - 10, 0xAAAAAA);
+                    super.render(ctx, mouseX, mouseY, delta);
+                }
+                case RELOADING_SPINNER -> {
+                    ctx.drawCenteredTextWithShadow(textRenderer, Text.literal("§6★ Reloading Resources ★"), cx, cy - 40, 0xFFFFFF);
+                    ctx.drawCenteredTextWithShadow(textRenderer, Text.literal("Please wait, reloading..."), cx, cy - 15, 0x88FFFFFF);
+
+                    double angleSpeed = (time % 1000) / 1000.0 * 2.0 * Math.PI;
+                    int numDots = 8;
+                    int radius = 12;
+                    for (int i = 0; i < numDots; i++) {
+                        double angle = angleSpeed + (i * 2.0 * Math.PI / numDots);
+                        int dotX = cx + (int)(radius * Math.cos(angle));
+                        int dotY = cy + 15 + (int)(radius * Math.sin(angle));
+                        
+                        int alpha = (int)(255 * ((double)i / numDots));
+                        int color = (alpha << 24) | (0xFFFFFF & rainbowColor);
+                        ctx.fill(dotX - 2, dotY - 2, dotX + 2, dotY + 2, color);
+                    }
+
+                    String[] spinner = {"|", "/", "-", "\\"};
+                    String spinChar = spinner[(ticksElapsed / 3) % 4];
+                    ctx.drawCenteredTextWithShadow(textRenderer, Text.literal("§e" + spinChar), cx, cy + 35, 0xFFFFFF);
+                }
             }
-
-            ctx.drawCenteredTextWithShadow(textRenderer, Text.literal("§6★ GUI API Datapack Writer ★"), cx, cy - 40, 0xFFFFFF);
-            ctx.drawCenteredTextWithShadow(textRenderer, Text.literal(status), cx, cy - 10, rainbowColor);
-
-            // Draw progress bar
-            int barWidth = 160;
-            int progress = Math.min(barWidth, (ticksElapsed * barWidth) / 55);
-            ctx.fill(cx - barWidth / 2, cy + 15, cx + barWidth / 2, cy + 19, 0x44FFFFFF);
-            ctx.fill(cx - barWidth / 2, cy + 15, cx - barWidth / 2 + progress, cy + 19, rainbowColor);
         }
     }
-
-    // ── Filler Editor Screen ─────────────────────────────────────────────────
+        // ── Filler Editor Screen ─────────────────────────────────────────────────
 
     static class FillerEditorScreen extends Screen {
         private final GuiEditorScreen parent;
@@ -1084,7 +1146,12 @@ public class GuiApiModMenuEntry implements ModMenuApi {
             addDrawableChild(new TextWidget(cx + 10, y, 140, 10, Text.literal("§eCondition"), textRenderer));
             conditionField = new TextFieldWidget(textRenderer, cx + 10, y + 12, 140, 18, Text.literal("Condition"));
             conditionField.setMaxLength(128);
-            conditionField.setText(btn.condition() != null ? btn.condition() : "");
+            if (btn.condition().isPresent()) {
+                GuiDefinition.ButtonCondition cond = btn.condition().get();
+                conditionField.setText(cond.type().name().toLowerCase() + ":" + cond.value());
+            } else {
+                conditionField.setText("");
+            }
             addDrawableChild(conditionField);
             y += 34;
 
@@ -1135,7 +1202,18 @@ public class GuiApiModMenuEntry implements ModMenuApi {
                     finalActions.add(new GuiDefinition.ButtonAction(GuiDefinition.ActionType.CLOSE, ""));
                 }
 
+                Optional<GuiDefinition.ButtonCondition> finalCondition = Optional.empty();
                 String condText = conditionField.getText().trim();
+                if (!condText.isEmpty()) {
+                    String[] condParts = condText.split(":", 2);
+                    if (condParts.length == 2) {
+                        try {
+                            GuiDefinition.ConditionType ct = GuiDefinition.ConditionType.fromString(condParts[0]);
+                            finalCondition = Optional.of(new GuiDefinition.ButtonCondition(ct, condParts[1]));
+                        } catch (Exception ignored) {}
+                    }
+                }
+
                 GuiDefinition.Button newBtn = new GuiDefinition.Button(
                         slotVal,
                         btn.page(),
@@ -1144,7 +1222,7 @@ public class GuiApiModMenuEntry implements ModMenuApi {
                         finalLore,
                         glint,
                         clickType,
-                        condText.isEmpty() ? null : condText,
+                        finalCondition,
                         finalActions,
                         toggle,
                         btn.customModelData(),
