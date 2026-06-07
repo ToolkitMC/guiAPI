@@ -35,6 +35,15 @@ public final class GuiApiConfig {
     private boolean logCommands         = false; // 2. New Config
     private int     defaultTickRate     = 20;    // 3. New Config
 
+    private boolean enableButtonGlint    = true;  // 4. New Config
+    private boolean showItemIdsDeveloper = false; // 5. New Config
+    private boolean muteClickErrors      = false; // 6. New Config
+    private boolean enableCloseSound     = true;  // 7. New Config
+
+    private String  chatPrefix           = "§8[§6GuiAPI§8] §f"; // 8. New Config
+    private int     soundVolume          = 100;                 // 9. New Config
+    private String  commandExecuteMode   = "CHAT";              // 10. New Config
+
     private GuiApiConfig() {}
 
     // ── Load / Save ──────────────────────────────────────────────────────────
@@ -69,6 +78,20 @@ public final class GuiApiConfig {
                 logCommands = obj.get("log_commands").getAsBoolean();
             if (obj.has("default_tick_rate"))
                 defaultTickRate = obj.get("default_tick_rate").getAsInt();
+            if (obj.has("enable_button_glint"))
+                enableButtonGlint = obj.get("enable_button_glint").getAsBoolean();
+            if (obj.has("show_item_ids_developer"))
+                showItemIdsDeveloper = obj.get("show_item_ids_developer").getAsBoolean();
+            if (obj.has("mute_click_errors"))
+                muteClickErrors = obj.get("mute_click_errors").getAsBoolean();
+            if (obj.has("enable_close_sound"))
+                enableCloseSound = obj.get("enable_close_sound").getAsBoolean();
+            if (obj.has("chat_prefix"))
+                chatPrefix = obj.get("chat_prefix").getAsString();
+            if (obj.has("sound_volume"))
+                soundVolume = Math.clamp(obj.get("sound_volume").getAsInt(), 0, 100);
+            if (obj.has("command_execute_mode"))
+                commandExecuteMode = obj.get("command_execute_mode").getAsString();
 
         } catch (IOException e) {
             GuiApiMod.LOGGER.error("[GuiAPI] Failed to load config: {}", e.getMessage());
@@ -87,6 +110,13 @@ public final class GuiApiConfig {
         obj.addProperty("allow_status_effects",    allowStatusEffects);
         obj.addProperty("log_commands",            logCommands);
         obj.addProperty("default_tick_rate",       defaultTickRate);
+        obj.addProperty("enable_button_glint",     enableButtonGlint);
+        obj.addProperty("show_item_ids_developer", showItemIdsDeveloper);
+        obj.addProperty("mute_click_errors",      muteClickErrors);
+        obj.addProperty("enable_close_sound",     enableCloseSound);
+        obj.addProperty("chat_prefix",             chatPrefix);
+        obj.addProperty("sound_volume",            soundVolume);
+        obj.addProperty("command_execute_mode",    commandExecuteMode);
         try {
             Files.writeString(CONFIG_PATH, GSON.toJson(obj));
         } catch (IOException e) {
@@ -123,4 +153,25 @@ public final class GuiApiConfig {
 
     public int getDefaultTickRate()               { return defaultTickRate; }
     public void setDefaultTickRate(int v)         { defaultTickRate = v; }
+
+    public boolean isEnableButtonGlint() { return enableButtonGlint; }
+    public void setEnableButtonGlint(boolean v) { enableButtonGlint = v; }
+
+    public boolean isShowItemIdsDeveloper() { return showItemIdsDeveloper; }
+    public void setShowItemIdsDeveloper(boolean v) { showItemIdsDeveloper = v; }
+
+    public boolean isMuteClickErrors() { return muteClickErrors; }
+    public void setMuteClickErrors(boolean v) { muteClickErrors = v; }
+
+    public boolean isEnableCloseSound() { return enableCloseSound; }
+    public void setEnableCloseSound(boolean v) { enableCloseSound = v; }
+
+    public String getChatPrefix() { return chatPrefix; }
+    public void setChatPrefix(String v) { chatPrefix = v; }
+
+    public int getSoundVolume() { return soundVolume; }
+    public void setSoundVolume(int v) { soundVolume = Math.clamp(v, 0, 100); }
+
+    public String getCommandExecuteMode() { return commandExecuteMode; }
+    public void setCommandExecuteMode(String v) { commandExecuteMode = v; }
 }

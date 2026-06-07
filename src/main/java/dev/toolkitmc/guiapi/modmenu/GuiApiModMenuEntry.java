@@ -45,7 +45,7 @@ public class GuiApiModMenuEntry implements ModMenuApi {
     static class GuiApiConfigScreen extends Screen {
 
         private enum Tab {
-            CONFIG, GUIS
+            CONFIG, GUIS, OTHER
         }
 
         private static class ScrollableElement {
@@ -81,6 +81,19 @@ public class GuiApiModMenuEntry implements ModMenuApi {
         private double scrollY = 0;
         private int maxScrollY = 0;
 
+        // Our 4 Choice Features
+        private boolean enableButtonGlint;
+        private boolean showItemIdsDeveloper;
+        private boolean muteClickErrors;
+        private boolean enableCloseSound;
+
+        // Our 3 New Interactive Input Features
+        private String  chatPrefix;
+        private int     soundVolume;
+        private String  commandExecuteMode;
+
+        private TextFieldWidget chatPrefixField;
+
         GuiApiConfigScreen(Screen parent) {
             super(Text.literal("GUI API — Settings"));
             this.parent = parent;
@@ -95,6 +108,39 @@ public class GuiApiModMenuEntry implements ModMenuApi {
             this.allowStatusEffects  = cfg.isAllowStatusEffects();
             this.logCommands         = cfg.isLogCommands();
             this.defaultTickRate     = cfg.getDefaultTickRate();
+            this.enableButtonGlint    = cfg.isEnableButtonGlint();
+            this.showItemIdsDeveloper = cfg.isShowItemIdsDeveloper();
+            this.muteClickErrors      = cfg.isMuteClickErrors();
+            this.enableCloseSound     = cfg.isEnableCloseSound();
+            this.chatPrefix           = cfg.getChatPrefix();
+            this.soundVolume          = cfg.getSoundVolume();
+            this.commandExecuteMode   = cfg.getCommandExecuteMode();
+        }
+
+
+
+
+
+        private static String nextExecuteMode(String current) {
+            if ("CHAT".equalsIgnoreCase(current)) return "SYSTEM";
+            if ("SYSTEM".equalsIgnoreCase(current)) return "SILENT";
+            return "CHAT";
+        }
+
+        @Override
+        public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+            if (chatPrefixField != null && chatPrefixField.visible && chatPrefixField.keyPressed(keyCode, scanCode, modifiers)) {
+                return true;
+            }
+            return super.keyPressed(keyCode, scanCode, modifiers);
+        }
+
+        @Override
+        public boolean charTyped(char chr, int modifiers) {
+            if (chatPrefixField != null && chatPrefixField.visible && chatPrefixField.charTyped(chr, modifiers)) {
+                return true;
+            }
+            return super.charTyped(chr, modifiers);
         }
 
         @Override
@@ -108,7 +154,7 @@ public class GuiApiModMenuEntry implements ModMenuApi {
                 currentTab = Tab.CONFIG;
                 scrollY = 0;
                 this.init();
-            }).dimensions(cx - 105, 22, 100, 18).build();
+            }).dimensions(cx - 125, 22, 80, 18).build();
             configTabBtn.active = (currentTab != Tab.CONFIG);
             addDrawableChild(configTabBtn);
 
@@ -116,9 +162,17 @@ public class GuiApiModMenuEntry implements ModMenuApi {
                 currentTab = Tab.GUIS;
                 scrollY = 0;
                 this.init();
-            }).dimensions(cx + 5, 22, 100, 18).build();
+            }).dimensions(cx - 40, 22, 80, 18).build();
             guisTabBtn.active = (currentTab != Tab.GUIS);
             addDrawableChild(guisTabBtn);
+
+            ButtonWidget otherTabBtn = ButtonWidget.builder(Text.literal(currentTab == Tab.OTHER ? "§aOther" : "§7Other"), btn -> {
+                currentTab = Tab.OTHER;
+                scrollY = 0;
+                this.init();
+            }).dimensions(cx + 45, 22, 80, 18).build();
+            otherTabBtn.active = (currentTab != Tab.OTHER);
+            addDrawableChild(otherTabBtn);
 
             // 2. Add persistent Action Buttons (Fixed at Bottom)
             addDrawableChild(ButtonWidget.builder(Text.literal("Save & Close"), btn -> {
@@ -133,6 +187,16 @@ public class GuiApiModMenuEntry implements ModMenuApi {
                 cfg.setAllowStatusEffects(allowStatusEffects);
                 cfg.setLogCommands(logCommands);
                 cfg.setDefaultTickRate(defaultTickRate);
+                cfg.setEnableButtonGlint(enableButtonGlint);
+                cfg.setShowItemIdsDeveloper(showItemIdsDeveloper);
+                cfg.setMuteClickErrors(muteClickErrors);
+                cfg.setEnableCloseSound(enableCloseSound);
+                if (chatPrefixField != null) {
+                    chatPrefix = chatPrefixField.getText();
+                }
+                cfg.setChatPrefix(chatPrefix);
+                cfg.setSoundVolume(soundVolume);
+                cfg.setCommandExecuteMode(commandExecuteMode);
                 cfg.save();
                 MinecraftClient.getInstance().setScreen(parent);
             }).dimensions(cx - 105, height - 25, 100, 20).build());
@@ -192,6 +256,71 @@ public class GuiApiModMenuEntry implements ModMenuApi {
                 y += 22;
 
                 addScrollablePermissionControls(cx, y);
+                y += 26;
+
+            } else if (currentTab == Tab.OTHER) {
+                int y = startY;
+
+                addScrollableToggle(cx, y, "Enable button glint",
+                        enableButtonGlint, v -> enableButtonGlint = v);
+                y += 22;
+
+                addScrollableToggle(cx, y, "Show developer item IDs",
+                        showItemIdsDeveloper, v -> showItemIdsDeveloper = v);
+                y += 22;
+
+                addScrollableToggle(cx, y, "Mute click errors",
+                        muteClickErrors, v -> muteClickErrors = v);
+                y += 22;
+
+                addScrollableToggle(cx, y, "Play close sound",
+                        enableCloseSound, v -> enableCloseSound = v);
+                y += 22;
+
+                // ── 3 New Interactive Input Features ──
+
+                // Input Type 1: Text Field for Chat Prefix
+                TextWidget chatPrefixLabel = new TextWidget(cx - 150, y, 300, 10, Text.literal("§eChat Prefix"), textRenderer);
+                chatPrefixField = new TextFieldWidget(textRenderer, cx - 150, y + 12, 300, 18, Text.literal("Prefix"));
+                chatPrefixField.setMaxLength(128);
+                chatPrefixField.setText(chatPrefix);
+                addDrawableChild(chatPrefixLabel);
+                addDrawableChild(chatPrefixField);
+                scrollableElements.add(new ScrollableElement(chatPrefixLabel, chatPrefixLabel, y, 10));
+                scrollableElements.add(new ScrollableElement(chatPrefixField, chatPrefixField, y + 12, 18));
+                y += 32;
+
+                // Input Type 2: Adjustment Buttons for Sound Volume
+                TextWidget soundVolumeLabel = new TextWidget(cx - 150, y + 4, 150, 10, Text.literal("§fSound Volume"), textRenderer);
+                TextWidget soundVolumeVal = new TextWidget(cx + 10, y + 4, 40, 10, Text.literal("§e" + soundVolume + "%"), textRenderer);
+                ButtonWidget soundMinus = ButtonWidget.builder(Text.literal("-10"), btn -> {
+                    soundVolume = Math.max(0, soundVolume - 10);
+                    soundVolumeVal.setMessage(Text.literal("§e" + soundVolume + "%"));
+                }).dimensions(cx + 50, y, 22, 18).build();
+                ButtonWidget soundPlus = ButtonWidget.builder(Text.literal("+10"), btn -> {
+                    soundVolume = Math.min(100, soundVolume + 10);
+                    soundVolumeVal.setMessage(Text.literal("§e" + soundVolume + "%"));
+                }).dimensions(cx + 74, y, 22, 18).build();
+                addDrawableChild(soundVolumeLabel);
+                addDrawableChild(soundVolumeVal);
+                addDrawableChild(soundMinus);
+                addDrawableChild(soundPlus);
+                scrollableElements.add(new ScrollableElement(soundVolumeLabel, soundVolumeLabel, y, 10));
+                scrollableElements.add(new ScrollableElement(soundVolumeVal, soundVolumeVal, y, 10));
+                scrollableElements.add(new ScrollableElement(soundMinus, soundMinus, y, 18));
+                scrollableElements.add(new ScrollableElement(soundPlus, soundPlus, y, 18));
+                y += 22;
+
+                // Input Type 3: Cycle Button for Message Execute Mode
+                TextWidget execModeLabel = new TextWidget(cx - 150, y + 4, 200, 10, Text.literal("§fMessage Execute Mode"), textRenderer);
+                ButtonWidget execModeBtn = ButtonWidget.builder(Text.literal(commandExecuteMode), btn -> {
+                    commandExecuteMode = nextExecuteMode(commandExecuteMode);
+                    btn.setMessage(Text.literal(commandExecuteMode));
+                }).dimensions(cx + 60, y, 60, 20).build();
+                addDrawableChild(execModeLabel);
+                addDrawableChild(execModeBtn);
+                scrollableElements.add(new ScrollableElement(execModeLabel, execModeLabel, y, 10));
+                scrollableElements.add(new ScrollableElement(execModeBtn, execModeBtn, y, 20));
                 y += 26;
 
             } else {
@@ -431,6 +560,10 @@ public class GuiApiModMenuEntry implements ModMenuApi {
             this.filler = newFiller;
         }
 
+
+
+
+
         @Override
         protected void init() {
             int cx = width / 2;
@@ -562,6 +695,10 @@ public class GuiApiModMenuEntry implements ModMenuApi {
             this.newDef = newDef;
         }
 
+
+
+
+
         @Override
         protected void init() {
             ticksElapsed = 0;
@@ -643,6 +780,10 @@ public class GuiApiModMenuEntry implements ModMenuApi {
             this.glint = fill.glint();
             this.hideTooltip = fill.hideTooltip();
         }
+
+
+
+
 
         @Override
         protected void init() {
@@ -757,6 +898,10 @@ public class GuiApiModMenuEntry implements ModMenuApi {
             this.buttonsList = new ArrayList<>(parent.buttons);
         }
 
+
+
+
+
         @Override
         protected void init() {
             int cx = width / 2;
@@ -849,6 +994,8 @@ public class GuiApiModMenuEntry implements ModMenuApi {
 
         private boolean glint;
         private Optional<GuiDefinition.ToggleDefinition> toggle;
+        private GuiDefinition.ClickType clickType;
+        private TextFieldWidget conditionField;
 
         ButtonEditorScreen(ButtonListScreen parent, int index, GuiDefinition.Button btn) {
             super(Text.literal("Edit Button"));
@@ -857,10 +1004,20 @@ public class GuiApiModMenuEntry implements ModMenuApi {
             this.btn = btn;
             this.glint = btn.glint();
             this.toggle = btn.toggle();
+            this.clickType = btn.clickType();
         }
 
         public void updateToggle(Optional<GuiDefinition.ToggleDefinition> newToggle) {
             this.toggle = newToggle;
+        }
+
+
+
+
+
+        private static GuiDefinition.ClickType nextClickType(GuiDefinition.ClickType current) {
+            GuiDefinition.ClickType[] vals = GuiDefinition.ClickType.values();
+            return vals[(current.ordinal() + 1) % vals.length];
         }
 
         @Override
@@ -916,6 +1073,21 @@ public class GuiApiModMenuEntry implements ModMenuApi {
             addDrawableChild(nameField);
             y += 24;
 
+            // Click Type & Condition Inputs
+            addDrawableChild(new TextWidget(cx - 150, y, 140, 10, Text.literal("§eClick Type"), textRenderer));
+            ButtonWidget clickTypeBtn = ButtonWidget.builder(Text.literal(clickType.name()), b -> {
+                clickType = nextClickType(clickType);
+                b.setMessage(Text.literal(clickType.name()));
+            }).dimensions(cx - 150, y + 12, 140, 18).build();
+            addDrawableChild(clickTypeBtn);
+
+            addDrawableChild(new TextWidget(cx + 10, y, 140, 10, Text.literal("§eCondition"), textRenderer));
+            conditionField = new TextFieldWidget(textRenderer, cx + 10, y + 12, 140, 18, Text.literal("Condition"));
+            conditionField.setMaxLength(128);
+            conditionField.setText(btn.condition() != null ? btn.condition() : "");
+            addDrawableChild(conditionField);
+            y += 34;
+
             // Lore Input (joined by ;)
             addDrawableChild(new TextWidget(cx - 150, y, 300, 10, Text.literal("§eLore Lines (Separate by semicolon ';')"), textRenderer));
             y += 12;
@@ -963,6 +1135,7 @@ public class GuiApiModMenuEntry implements ModMenuApi {
                     finalActions.add(new GuiDefinition.ButtonAction(GuiDefinition.ActionType.CLOSE, ""));
                 }
 
+                String condText = conditionField.getText().trim();
                 GuiDefinition.Button newBtn = new GuiDefinition.Button(
                         slotVal,
                         btn.page(),
@@ -970,8 +1143,8 @@ public class GuiApiModMenuEntry implements ModMenuApi {
                         nameField.getText(),
                         finalLore,
                         glint,
-                        btn.clickType(),
-                        btn.condition(),
+                        clickType,
+                        condText.isEmpty() ? null : condText,
                         finalActions,
                         toggle,
                         btn.customModelData(),
@@ -1010,6 +1183,7 @@ public class GuiApiModMenuEntry implements ModMenuApi {
                     amountField.keyPressed(keyCode, scanCode, modifiers) ||
                     itemField.keyPressed(keyCode, scanCode, modifiers) ||
                     nameField.keyPressed(keyCode, scanCode, modifiers) ||
+                    conditionField.keyPressed(keyCode, scanCode, modifiers) ||
                     loreField.keyPressed(keyCode, scanCode, modifiers) ||
                     actionsField.keyPressed(keyCode, scanCode, modifiers)) {
                 return true;
@@ -1023,6 +1197,7 @@ public class GuiApiModMenuEntry implements ModMenuApi {
                     amountField.charTyped(chr, modifiers) ||
                     itemField.charTyped(chr, modifiers) ||
                     nameField.charTyped(chr, modifiers) ||
+                    conditionField.charTyped(chr, modifiers) ||
                     loreField.charTyped(chr, modifiers) ||
                     actionsField.charTyped(chr, modifiers)) {
                 return true;
@@ -1054,6 +1229,10 @@ public class GuiApiModMenuEntry implements ModMenuApi {
             this.parent = parent;
             this.currentToggle = currentToggle;
         }
+
+
+
+
 
         @Override
         protected void init() {

@@ -281,6 +281,10 @@ public class BarrelGuiHandler {
         PlayerTickState state = OPEN_GUIS.remove(player.getUuid());
         if (state == null) return;
         debug("close: player={} gui={}", player.getNameForScoreboard(), state.def.getId());
+        if (dev.toolkitmc.guiapi.config.GuiApiConfig.INSTANCE.isEnableCloseSound()) {
+            float closeVolume = 0.5f * (dev.toolkitmc.guiapi.config.GuiApiConfig.INSTANCE.getSoundVolume() / 100.0f);
+            player.playSoundToPlayer(net.minecraft.sound.SoundEvents.BLOCK_CHEST_CLOSE, net.minecraft.sound.SoundCategory.BLOCKS, closeVolume, 1.0f);
+        }
         for (GuiDefinition.ButtonAction action : state.def.getOnClose()) {
             executeAction(player, state.def, state.page, action);
         }
@@ -334,7 +338,7 @@ public class BarrelGuiHandler {
             stack.set(DataComponentTypes.CUSTOM_NAME,
                     Text.literal(fill.name()).styled(s -> s.withItalic(false)));
         }
-        if (fill.glint()) {
+        if (fill.glint() && dev.toolkitmc.guiapi.config.GuiApiConfig.INSTANCE.isEnableButtonGlint()) {
             stack.set(DataComponentTypes.ENCHANTMENT_GLINT_OVERRIDE, true);
         }
         stack.set(DataComponentTypes.CUSTOM_DATA, NbtComponent.of(new NbtCompound()));
@@ -409,15 +413,20 @@ public class BarrelGuiHandler {
                     Text.literal(resolvedName).styled(s -> s.withItalic(false)));
         }
 
+        List<Text> loreTexts = new java.util.ArrayList<>();
         if (!lore.isEmpty()) {
-            List<Text> loreTexts = lore.stream()
-                    .map(l -> (Text) Text.literal(resolve(l, player, def, page))
-                            .styled(s -> s.withItalic(false)))
-                    .toList();
+            for (String l : lore) {
+                loreTexts.add(Text.literal(resolve(l, player, def, page)).styled(s -> s.withItalic(false)));
+            }
+        }
+        if (dev.toolkitmc.guiapi.config.GuiApiConfig.INSTANCE.isShowItemIdsDeveloper()) {
+            loreTexts.add(Text.literal("§8ID: " + net.minecraft.registry.Registries.ITEM.getId(item)).styled(s -> s.withItalic(false)));
+        }
+        if (!loreTexts.isEmpty()) {
             stack.set(DataComponentTypes.LORE, new LoreComponent(loreTexts));
         }
 
-        if (glint) stack.set(DataComponentTypes.ENCHANTMENT_GLINT_OVERRIDE, true);
+        if (glint && dev.toolkitmc.guiapi.config.GuiApiConfig.INSTANCE.isEnableButtonGlint()) stack.set(DataComponentTypes.ENCHANTMENT_GLINT_OVERRIDE, true);
 
         // Mark as GUI item to block extraction
         stack.set(DataComponentTypes.CUSTOM_DATA, NbtComponent.of(new NbtCompound()));
@@ -628,7 +637,9 @@ public class BarrelGuiHandler {
                 }
                 if (action.runWith() == GuiDefinition.RunWith.CONSOLE) {
                     if (!dev.toolkitmc.guiapi.config.GuiApiConfig.INSTANCE.isAllowConsoleRunWith()) {
-                        GuiApiMod.LOGGER.warn("[GuiAPI] run_with:console is disabled in config. Skipping: {}", cmd);
+                        if (!dev.toolkitmc.guiapi.config.GuiApiConfig.INSTANCE.isMuteClickErrors()) {
+                            GuiApiMod.LOGGER.warn("[GuiAPI] run_with:console is disabled in config. Skipping: {}", cmd);
+                        }
                         break;
                     }
                     server.getCommandManager().executeWithPrefix(server.getCommandSource(), cmd);
@@ -654,8 +665,15 @@ public class BarrelGuiHandler {
                 }
                 return true;
             }
-            case MESSAGE -> player.sendMessage(
-                    Text.literal(resolve(action.value(), player, def, currentPage)), false);
+            case MESSAGE -> {
+                String msgVal = resolve(action.value(), player, def, currentPage);
+                String mode = dev.toolkitmc.guiapi.config.GuiApiConfig.INSTANCE.getCommandExecuteMode();
+                if ("CHAT".equalsIgnoreCase(mode)) {
+                    player.sendMessage(Text.literal(msgVal), false);
+                } else if ("SYSTEM".equalsIgnoreCase(mode)) {
+                    player.sendMessage(Text.literal(msgVal), true);
+                }
+            }
             case NEXT_PAGE -> {
                 int next = currentPage + 1;
                 if (next < def.getPageCount()) {
@@ -695,8 +713,9 @@ public class BarrelGuiHandler {
                     net.minecraft.sound.SoundEvent soundEvent =
                             Registries.SOUND_EVENT.get(soundIdent);
                     if (soundEvent != null) {
+                        float finalVolume = volume * (dev.toolkitmc.guiapi.config.GuiApiConfig.INSTANCE.getSoundVolume() / 100.0f);
                         player.playSoundToPlayer(soundEvent,
-                                net.minecraft.sound.SoundCategory.PLAYERS, volume, pitch);
+                                net.minecraft.sound.SoundCategory.PLAYERS, finalVolume, pitch);
                     } else {
                         if (dev.toolkitmc.guiapi.config.GuiApiConfig.INSTANCE.isLogUnknownSounds())
                             GuiApiMod.LOGGER.warn("[GuiAPI] Unknown sound '{}' in sound action.", soundId);
@@ -788,7 +807,9 @@ public class BarrelGuiHandler {
             }
             case ADD_EFFECT -> {
                 if (!dev.toolkitmc.guiapi.config.GuiApiConfig.INSTANCE.isAllowStatusEffects()) {
-                    GuiApiMod.LOGGER.warn("[GuiAPI] Status effects are disabled globally in config!");
+                    if (!dev.toolkitmc.guiapi.config.GuiApiConfig.INSTANCE.isMuteClickErrors()) {
+                        GuiApiMod.LOGGER.warn("[GuiAPI] Status effects are disabled globally in config!");
+                    }
                     break;
                 }
                 String resolved = resolve(action.value(), player, def, currentPage);
@@ -814,7 +835,9 @@ public class BarrelGuiHandler {
             }
             case REMOVE_EFFECT -> {
                 if (!dev.toolkitmc.guiapi.config.GuiApiConfig.INSTANCE.isAllowStatusEffects()) {
-                    GuiApiMod.LOGGER.warn("[GuiAPI] Status effects are disabled globally in config!");
+                    if (!dev.toolkitmc.guiapi.config.GuiApiConfig.INSTANCE.isMuteClickErrors()) {
+                        GuiApiMod.LOGGER.warn("[GuiAPI] Status effects are disabled globally in config!");
+                    }
                     break;
                 }
                 String resolved = resolve(action.value(), player, def, currentPage);
@@ -828,7 +851,9 @@ public class BarrelGuiHandler {
             }
             case CLEAR_EFFECTS -> {
                 if (!dev.toolkitmc.guiapi.config.GuiApiConfig.INSTANCE.isAllowStatusEffects()) {
-                    GuiApiMod.LOGGER.warn("[GuiAPI] Status effects are disabled globally in config!");
+                    if (!dev.toolkitmc.guiapi.config.GuiApiConfig.INSTANCE.isMuteClickErrors()) {
+                        GuiApiMod.LOGGER.warn("[GuiAPI] Status effects are disabled globally in config!");
+                    }
                     break;
                 }
                 player.clearStatusEffects();
