@@ -127,8 +127,6 @@ public class GuiCommand {
     }
 
     private static int reloadGuis(CommandContext<ServerCommandSource> ctx) {
-        // Delegates to the server's full resource reload so GuiRegistry.apply()
-        // fires through the normal Fabric reload pipeline — same as /reload.
         ctx.getSource().getServer()
                 .reloadResources(ctx.getSource().getServer().getDataPackManager().getEnabledIds())
                 .thenRun(() -> ctx.getSource().sendFeedback(

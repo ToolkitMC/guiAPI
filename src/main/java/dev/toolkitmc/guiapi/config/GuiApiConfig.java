@@ -31,6 +31,9 @@ public final class GuiApiConfig {
     private boolean debugMode           = false;
     private boolean allowCloseOnMove    = true;
     private boolean allowDelayedActions = true;
+    private boolean allowStatusEffects  = true; // 1. New Config
+    private boolean logCommands         = false; // 2. New Config
+    private int     defaultTickRate     = 20;    // 3. New Config
 
     private GuiApiConfig() {}
 
@@ -60,6 +63,12 @@ public final class GuiApiConfig {
                 allowCloseOnMove = obj.get("allow_close_on_move").getAsBoolean();
             if (obj.has("allow_delayed_actions"))
                 allowDelayedActions = obj.get("allow_delayed_actions").getAsBoolean();
+            if (obj.has("allow_status_effects"))
+                allowStatusEffects = obj.get("allow_status_effects").getAsBoolean();
+            if (obj.has("log_commands"))
+                logCommands = obj.get("log_commands").getAsBoolean();
+            if (obj.has("default_tick_rate"))
+                defaultTickRate = obj.get("default_tick_rate").getAsInt();
 
         } catch (IOException e) {
             GuiApiMod.LOGGER.error("[GuiAPI] Failed to load config: {}", e.getMessage());
@@ -75,6 +84,9 @@ public final class GuiApiConfig {
         obj.addProperty("debug_mode",              debugMode);
         obj.addProperty("allow_close_on_move",     allowCloseOnMove);
         obj.addProperty("allow_delayed_actions",   allowDelayedActions);
+        obj.addProperty("allow_status_effects",    allowStatusEffects);
+        obj.addProperty("log_commands",            logCommands);
+        obj.addProperty("default_tick_rate",       defaultTickRate);
         try {
             Files.writeString(CONFIG_PATH, GSON.toJson(obj));
         } catch (IOException e) {
@@ -102,4 +114,13 @@ public final class GuiApiConfig {
 
     public boolean isAllowDelayedActions()         { return allowDelayedActions; }
     public void setAllowDelayedActions(boolean v)  { allowDelayedActions = v; }
+
+    public boolean isAllowStatusEffects()         { return allowStatusEffects; }
+    public void setAllowStatusEffects(boolean v)  { allowStatusEffects = v; }
+
+    public boolean isLogCommands()                { return logCommands; }
+    public void setLogCommands(boolean v)         { logCommands = v; }
+
+    public int getDefaultTickRate()               { return defaultTickRate; }
+    public void setDefaultTickRate(int v)         { defaultTickRate = v; }
 }

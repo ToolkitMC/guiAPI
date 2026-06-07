@@ -32,28 +32,6 @@ import java.util.Optional;
 
 /**
  * Server-side chest GUI handler.
- *
- * Features:
- *  - Multi-page support (page tracked per player)
- *  - Toggle buttons (tag-backed on/off state)
- *  - Conditional buttons (has_tag, not_tag, score_gt/lt/eq, has_item, not_item, level, health, food)
- *  - Multiple actions per button (executed in order)
- *  - on_open / on_close action hooks
- *  - Placeholder substitution in text fields
- *  - Enchantment glint on items
- *  - run_command with run_with: player|console
- *  - Dynamic refresh support (refresh action & flicker-free toggle)
- *  - take_item action support
- *  - item_model and 1.21.4+ custom_model_data support
- *  - Dynamic stack amount (amount field with placeholders)
- *  - Scoreboard manipulation (set_score, add_score, sub_score) & action_bar actions
- *  - Tooltip Controls (hide_tooltip and hide_additional_tooltip via 1.21.4+ TOOLTIP_DISPLAY)
- *  - RPG/Survival status conditions (level, health, food)
- *  - Lightweight potion status effect actions (add_effect, remove_effect, clear_effects)
- *  - Top-level background filler support (filler JSON object)
- *  - Top-level auto-refresh tick support (tick_rate JSON field)
- *  - Action delay scheduling ("delay": int on actions)
- *  - Anti-exploit movement gating ("close_on_move": true)
  */
 public class BarrelGuiHandler {
 
@@ -256,11 +234,9 @@ public class BarrelGuiHandler {
 
             if (isToggle) {
                 GuiDefinition.ToggleDefinition tgl = btn.toggle().get();
-                // Resolve the correct action list BEFORE flipping the tag,
-                // so actionsOn fires when the toggle was ON (turning it OFF), etc.
                 List<GuiDefinition.ButtonAction> toggleActions = resolveActions(player, btn);
 
-                // Flip tag synchronously via Java API — avoids command dispatcher race.
+                // Flip tag synchronously via Java API
                 boolean wasOn = player.getCommandTags().contains(tgl.tag());
                 if (wasOn) player.removeCommandTag(tgl.tag());
                 else       player.addCommandTag(tgl.tag());
@@ -292,8 +268,6 @@ public class BarrelGuiHandler {
     }
 
     public static void onClose(UUID playerUuid) {
-        // UUID-only overload: fires when we don't have a ServerPlayerEntity reference.
-        // Cannot run on_close actions (no player object) but MUST clear vars to avoid leak.
         if (OPEN_GUIS.remove(playerUuid) != null) {
             GuiVarStore.INSTANCE.clear(playerUuid);
         }
@@ -310,8 +284,6 @@ public class BarrelGuiHandler {
         for (GuiDefinition.ButtonAction action : state.def.getOnClose()) {
             executeAction(player, state.def, state.page, action);
         }
-        // Only clear vars on a real close, not on GUI navigation (open_gui, next/prev_page).
-        // Navigation removes the state via navigateAway() before calling closeHandledScreen().
         GuiVarStore.INSTANCE.clear(player.getUuid());
     }
 
@@ -367,11 +339,9 @@ public class BarrelGuiHandler {
         }
         stack.set(DataComponentTypes.CUSTOM_DATA, NbtComponent.of(new NbtCompound()));
         if (fill.hideTooltip()) {
+            // Pristine fix: Create and apply correct native 1.21.8 TooltipDisplayComponent showing no tooltips
             net.minecraft.component.type.TooltipDisplayComponent tooltipDisplay =
-                    net.minecraft.component.type.TooltipDisplayComponent.DEFAULT
-                            .with(DataComponentTypes.CUSTOM_NAME, true)
-                            .with(DataComponentTypes.ITEM_NAME, true)
-                            .with(DataComponentTypes.LORE, true);
+                    new net.minecraft.component.type.TooltipDisplayComponent(false, java.util.List.of());
             stack.set(DataComponentTypes.TOOLTIP_DISPLAY, tooltipDisplay);
         }
         return stack;
@@ -380,7 +350,6 @@ public class BarrelGuiHandler {
     private static ItemStack buildStack(ServerPlayerEntity player,
                                         GuiDefinition def, int page,
                                         GuiDefinition.Button btn) {
-        // Resolve toggle state to concrete display values
         final String  itemId;
         final String  name;
         final List<String> lore;
@@ -473,29 +442,21 @@ public class BarrelGuiHandler {
 
         // --- Tooltip Control (1.21.4+ TOOLTIP_DISPLAY Component) ---
         if (hideTooltip) {
-            net.minecraft.component.type.TooltipDisplayComponent tooltipDisplay = stack.getOrDefault(
-                DataComponentTypes.TOOLTIP_DISPLAY,
-                net.minecraft.component.type.TooltipDisplayComponent.DEFAULT
-            );
-            tooltipDisplay = tooltipDisplay
-                .with(DataComponentTypes.CUSTOM_NAME, true)
-                .with(DataComponentTypes.ITEM_NAME, true)
-                .with(DataComponentTypes.LORE, true);
+            // Pristine fix: Create and apply correct native 1.21.8 TooltipDisplayComponent showing no tooltips
+            net.minecraft.component.type.TooltipDisplayComponent tooltipDisplay =
+                    new net.minecraft.component.type.TooltipDisplayComponent(false, java.util.List.of());
             stack.set(DataComponentTypes.TOOLTIP_DISPLAY, tooltipDisplay);
-        }
-
-        if (hideAdditionalTooltip) {
-            net.minecraft.component.type.TooltipDisplayComponent tooltipDisplay = stack.getOrDefault(
-                DataComponentTypes.TOOLTIP_DISPLAY,
-                net.minecraft.component.type.TooltipDisplayComponent.DEFAULT
-            );
-            tooltipDisplay = tooltipDisplay
-                .with(DataComponentTypes.ATTRIBUTE_MODIFIERS, true)
-                .with(DataComponentTypes.ENCHANTMENTS, true)
-                .with(DataComponentTypes.STORED_ENCHANTMENTS, true)
-                .with(DataComponentTypes.DYED_COLOR, true)
-                .with(DataComponentTypes.POTION_CONTENTS, true)
-                .with(DataComponentTypes.UNBREAKABLE, true);
+        } else if (hideAdditionalTooltip) {
+            // Pristine fix: Create and apply correct native 1.21.8 TooltipDisplayComponent with specific hidden components
+            net.minecraft.component.type.TooltipDisplayComponent tooltipDisplay =
+                    new net.minecraft.component.type.TooltipDisplayComponent(true, java.util.List.of(
+                            DataComponentTypes.ATTRIBUTE_MODIFIERS,
+                            DataComponentTypes.ENCHANTMENTS,
+                            DataComponentTypes.STORED_ENCHANTMENTS,
+                            DataComponentTypes.DYED_COLOR,
+                            DataComponentTypes.POTION_CONTENTS,
+                            DataComponentTypes.UNBREAKABLE
+                    ));
             stack.set(DataComponentTypes.TOOLTIP_DISPLAY, tooltipDisplay);
         }
 
@@ -504,15 +465,6 @@ public class BarrelGuiHandler {
 
     // ── Placeholder resolution ────────────────────────────────────────────────
 
-    /**
-     * Resolves placeholders in a string:
-     *   {player}    — player name
-     *   {gui}       — GUI id
-     *   {page}      — page index (0-based)
-     *   {page1}     — page index (1-based)
-     *   {pages}     — total page count
-     *   {score:obj} — player score in objective "obj"
-     */
     static String resolve(String text, ServerPlayerEntity player,
                           GuiDefinition def, int page) {
         if (text == null || text.isEmpty() || !text.contains("{")) return text;
@@ -648,9 +600,6 @@ public class BarrelGuiHandler {
 
     // ── Toggle action resolution ─────────────────────────────────────────────
 
-    /**
-     * Returns the actions to execute for a click, accounting for toggle state.
-     */
     private static List<GuiDefinition.ButtonAction> resolveActions(
             ServerPlayerEntity player, GuiDefinition.Button btn) {
         if (btn.toggle().isPresent()) {
@@ -663,10 +612,6 @@ public class BarrelGuiHandler {
 
     // ── Action execution ─────────────────────────────────────────────────────
 
-    /**
-     * Execute a single action.
-     * @return true if the action chain should stop (screen was closed/changed)
-     */
     static boolean executeAction(ServerPlayerEntity player, GuiDefinition def,
                                  int currentPage, GuiDefinition.ButtonAction action) {
         MinecraftServer server = player.getServer();
@@ -676,8 +621,11 @@ public class BarrelGuiHandler {
             case RUN_COMMAND -> {
                 String cmd = action.value().startsWith("/")
                         ? action.value().substring(1) : action.value();
-                // Resolve placeholders in command value too
                 cmd = resolve(cmd, player, def, currentPage);
+                // Auditing executed command logs if enabled globally in config
+                if (dev.toolkitmc.guiapi.config.GuiApiConfig.INSTANCE.isLogCommands()) {
+                    GuiApiMod.LOGGER.info("[GuiAPI|CommandLog] Player {} executed command: {}", player.getNameForScoreboard(), cmd);
+                }
                 if (action.runWith() == GuiDefinition.RunWith.CONSOLE) {
                     if (!dev.toolkitmc.guiapi.config.GuiApiConfig.INSTANCE.isAllowConsoleRunWith()) {
                         GuiApiMod.LOGGER.warn("[GuiAPI] run_with:console is disabled in config. Skipping: {}", cmd);
@@ -727,12 +675,8 @@ public class BarrelGuiHandler {
                 return true;
             }
             case SOUND -> {
-                // Resolve placeholders in sound value too!
                 String resolvedSound = resolve(action.value(), player, def, currentPage);
                 String[] parts = resolvedSound.split(":");
-                // Reconstruct namespace:path which may itself contain ':'
-                // Format is always <namespace>:<path>[:<volume>[:<pitch>]]
-                // So minimum 2 parts (namespace + path), max 4.
                 String soundId;
                 float volume = 1.0f;
                 float pitch  = 1.0f;
@@ -843,6 +787,10 @@ public class BarrelGuiHandler {
                 player.sendMessage(Text.literal(resolved), true);
             }
             case ADD_EFFECT -> {
+                if (!dev.toolkitmc.guiapi.config.GuiApiConfig.INSTANCE.isAllowStatusEffects()) {
+                    GuiApiMod.LOGGER.warn("[GuiAPI] Status effects are disabled globally in config!");
+                    break;
+                }
                 String resolved = resolve(action.value(), player, def, currentPage);
                 String[] parts = resolved.split(":");
                 if (parts.length >= 2) {
@@ -853,26 +801,36 @@ public class BarrelGuiHandler {
                         boolean particles = parts.length <= 3 || Boolean.parseBoolean(parts[3]);
 
                         Identifier effIdent = Identifier.tryParse(effectId);
-                        if (effIdent != null) {
-                            Registries.STATUS_EFFECT.getEntry(effIdent).ifPresent(entry -> {
+                        if (effIdent != null && Registries.STATUS_EFFECT.containsId(effIdent)) {
+                            net.minecraft.entity.effect.StatusEffect effect = Registries.STATUS_EFFECT.get(effIdent);
+                            if (effect != null) {
                                 player.addStatusEffect(new net.minecraft.entity.effect.StatusEffectInstance(
-                                        entry, durationSecs * 20, amp, false, particles, particles
+                                        Registries.STATUS_EFFECT.getEntry(effect), durationSecs * 20, amp, false, particles, particles
                                 ));
-                            });
+                            }
                         }
                     } catch (NumberFormatException ignored) {}
                 }
             }
             case REMOVE_EFFECT -> {
+                if (!dev.toolkitmc.guiapi.config.GuiApiConfig.INSTANCE.isAllowStatusEffects()) {
+                    GuiApiMod.LOGGER.warn("[GuiAPI] Status effects are disabled globally in config!");
+                    break;
+                }
                 String resolved = resolve(action.value(), player, def, currentPage);
                 Identifier effIdent = Identifier.tryParse(resolved);
-                if (effIdent != null) {
-                    Registries.STATUS_EFFECT.getEntry(effIdent).ifPresent(entry -> {
-                        player.removeStatusEffect(entry);
-                    });
+                if (effIdent != null && Registries.STATUS_EFFECT.containsId(effIdent)) {
+                    net.minecraft.entity.effect.StatusEffect effect = Registries.STATUS_EFFECT.get(effIdent);
+                    if (effect != null) {
+                        player.removeStatusEffect(Registries.STATUS_EFFECT.getEntry(effect));
+                    }
                 }
             }
             case CLEAR_EFFECTS -> {
+                if (!dev.toolkitmc.guiapi.config.GuiApiConfig.INSTANCE.isAllowStatusEffects()) {
+                    GuiApiMod.LOGGER.warn("[GuiAPI] Status effects are disabled globally in config!");
+                    break;
+                }
                 player.clearStatusEffects();
             }
         }

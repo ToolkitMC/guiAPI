@@ -164,6 +164,13 @@ public class GuiRegistry extends SinglePreparationResourceReloader<Map<Identifie
             bObj.addProperty("hide_tooltip", b.hideTooltip());
             bObj.addProperty("hide_additional_tooltip", b.hideAdditionalTooltip());
 
+            // Serialize Lore lines (Fixed: no longer omitted during save!)
+            com.google.gson.JsonArray loreArr = new com.google.gson.JsonArray();
+            for (String l : b.lore()) {
+                loreArr.add(l);
+            }
+            bObj.add("lore", loreArr);
+
             if (b.condition().isPresent()) {
                 GuiDefinition.ButtonCondition cond = b.condition().get();
                 JsonObject cObj = new JsonObject();

@@ -260,7 +260,8 @@ public class GuiDefinition {
             filler = Optional.of(new FillerConfig(fItem, fName, fGlint, fHideTooltip));
         }
 
-        int tickRate = obj.has("tick_rate") ? obj.get("tick_rate").getAsInt() : 0;
+        // Fallback to globally configured default tick rate if omitted in JSON
+        int tickRate = obj.has("tick_rate") ? obj.get("tick_rate").getAsInt() : dev.toolkitmc.guiapi.config.GuiApiConfig.INSTANCE.getDefaultTickRate();
         boolean closeOnMove = obj.has("close_on_move") && obj.get("close_on_move").getAsBoolean();
 
         return new GuiDefinition(id, title, rows, buttons, onOpen, onClose, filler, tickRate, closeOnMove);

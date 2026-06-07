@@ -31,7 +31,7 @@ public class GuiApiModMenuEntry implements ModMenuApi {
 
     // ── Helper methods for Actions string parsing & serialization ────────────
 
-    private static GuiDefinition.ButtonAction parseActionFromString(String str) {
+    public static GuiDefinition.ButtonAction parseActionFromString(String str) {
         String[] parts = str.trim().split(":", 3);
         if (parts.length >= 2) {
             GuiDefinition.ActionType type = GuiDefinition.ActionType.fromString(parts[0]);
@@ -52,7 +52,7 @@ public class GuiApiModMenuEntry implements ModMenuApi {
         return new GuiDefinition.ButtonAction(GuiDefinition.ActionType.CLOSE, "");
     }
 
-    private static String serializeActionsToString(List<GuiDefinition.ButtonAction> actions) {
+    public static String serializeActionsToString(List<GuiDefinition.ButtonAction> actions) {
         List<String> list = new ArrayList<>();
         for (GuiDefinition.ButtonAction act : actions) {
             String prefix = act.type().name().toLowerCase();
@@ -81,6 +81,11 @@ public class GuiApiModMenuEntry implements ModMenuApi {
         private boolean debugMode;
         private boolean allowCloseOnMove;
         private boolean allowDelayedActions;
+        private boolean allowStatusEffects;
+        private boolean logCommands;
+        private int     defaultTickRate;
+
+        private int guiListPage = 0;
 
         GuiApiConfigScreen(Screen parent) {
             super(Text.literal("GUI API — Settings"));
@@ -93,12 +98,15 @@ public class GuiApiModMenuEntry implements ModMenuApi {
             this.debugMode           = cfg.isDebugMode();
             this.allowCloseOnMove    = cfg.isAllowCloseOnMove();
             this.allowDelayedActions = cfg.isAllowDelayedActions();
+            this.allowStatusEffects  = cfg.isAllowStatusEffects();
+            this.logCommands         = cfg.isLogCommands();
+            this.defaultTickRate     = cfg.getDefaultTickRate();
         }
 
         @Override
         protected void init() {
             int cx = width / 2;
-            int y  = 40;
+            int y  = 30;
 
             // ── Settings ─────────────────────────────────────────────────────
 
@@ -107,42 +115,73 @@ public class GuiApiModMenuEntry implements ModMenuApi {
                     "Permit buttons to run commands with console (OP-level) permission.",
                     allowConsoleRunWith,
                     v -> allowConsoleRunWith = v);
-            y += 24;
+            y += 22;
 
             addToggle(cx, y, "log_unknown_items",
                     "Log unknown item IDs",
                     "Print a WARN to the log when a button uses an unrecognized item ID.",
                     logUnknownItems,
                     v -> logUnknownItems = v);
-            y += 24;
+            y += 22;
 
             addToggle(cx, y, "log_unknown_sounds",
                     "Log unknown sound IDs",
                     "Print a WARN to the log when a sound action uses an unrecognized sound ID.",
                     logUnknownSounds,
                     v -> logUnknownSounds = v);
-            y += 24;
+            y += 22;
 
             addToggle(cx, y, "debug_mode",
                     "Debug mode",
                     "Log GUI open/close, action execution and placeholder resolution to console.",
                     debugMode,
                     v -> debugMode = v);
-            y += 24;
+            y += 22;
 
             addToggle(cx, y, "allow_close_on_move",
                     "Allow close_on_move",
                     "Globally permit menus to close automatically when players walk away.",
                     allowCloseOnMove,
                     v -> allowCloseOnMove = v);
-            y += 24;
+            y += 22;
 
             addToggle(cx, y, "allow_delayed_actions",
                     "Allow action delays",
                     "Globally permit action chains to execute with tick delays.",
                     allowDelayedActions,
                     v -> allowDelayedActions = v);
-            y += 24;
+            y += 22;
+
+            addToggle(cx, y, "allow_status_effects",
+                    "Allow status effects",
+                    "Globally permit buttons and click actions to manage player potion effects.",
+                    allowStatusEffects,
+                    v -> allowStatusEffects = v);
+            y += 22;
+
+            addToggle(cx, y, "log_commands",
+                    "Log command executions",
+                    "Write a message to log console every time a GUI button runs a command.",
+                    logCommands,
+                    v -> logCommands = v);
+            y += 22;
+
+            // Default Tick Rate Controls
+            addDrawableChild(new TextWidget(cx - 150, y + 4, 150, 10, Text.literal("§fDefault Tick Rate"), textRenderer));
+            TextWidget[] defaultTickRateTextRef = new TextWidget[1];
+            defaultTickRateTextRef[0] = new TextWidget(cx + 10, y + 4, 40, 10, Text.literal("§e" + defaultTickRate), textRenderer);
+            addDrawableChild(defaultTickRateTextRef[0]);
+
+            addDrawableChild(ButtonWidget.builder(Text.literal("-5"), btn -> {
+                defaultTickRate = Math.max(0, defaultTickRate - 5);
+                defaultTickRateTextRef[0].setMessage(Text.literal("§e" + defaultTickRate));
+            }).dimensions(cx + 50, y, 20, 18).build());
+
+            addDrawableChild(ButtonWidget.builder(Text.literal("+5"), btn -> {
+                defaultTickRate = Math.min(2400, defaultTickRate + 5);
+                defaultTickRateTextRef[0].setMessage(Text.literal("§e" + defaultTickRate));
+            }).dimensions(cx + 75, y, 20, 18).build());
+            y += 22;
 
             // Permission level — cycle 0-4
             addDrawableChild(new TextWidget(cx - 150, y + 4, 200, 10,
@@ -151,24 +190,28 @@ public class GuiApiModMenuEntry implements ModMenuApi {
                 permissionLevel = (permissionLevel + 1) % 5;
                 btn.setMessage(permLevelText(permissionLevel));
             }).dimensions(cx + 60, y, 40, 20).build());
-            y += 30;
+            y += 26;
 
-            // ── Loaded GUI list ───────────────────────────────────────────────
+            // ── Loaded GUI list (Completed Scrollable/Paginated GUI List) ─────
             var all = GuiRegistry.INSTANCE.getAll();
             int count = all.size();
+            
+            int guisPerPage = 3;
+            int totalPages = (count + guisPerPage - 1) / guisPerPage;
+            if (totalPages == 0) totalPages = 1;
+            if (guiListPage >= totalPages) guiListPage = totalPages - 1;
+
             addDrawableChild(new TextWidget(cx - 150, y, 300, 10,
-                    Text.literal("§7Loaded GUIs: §f" + count +
-                            (count == 0 ? " §c(join a world to load datapacks)" : "")),
+                    Text.literal("§7Loaded GUIs: §f" + count + " (Page " + (guiListPage + 1) + "/" + totalPages + ")"),
                     textRenderer));
             y += 12;
 
-            int shown = 0;
-            for (var entry : all.entrySet()) {
-                if (shown >= 4) {
-                    addDrawableChild(new TextWidget(cx - 150, y, 300, 10,
-                            Text.literal("§8... and " + (count - 4) + " more"), textRenderer));
-                    break;
-                }
+            List<java.util.Map.Entry<net.minecraft.util.Identifier, GuiDefinition>> list = new ArrayList<>(all.entrySet());
+            int startIdx = guiListPage * guisPerPage;
+            int endIdx = Math.min(startIdx + guisPerPage, count);
+
+            for (int i = startIdx; i < endIdx; i++) {
+                var entry = list.get(i);
                 var id = entry.getKey();
                 var def = entry.getValue();
 
@@ -179,7 +222,24 @@ public class GuiApiModMenuEntry implements ModMenuApi {
                 ).dimensions(cx - 150, y, 300, 18).build());
 
                 y += 20;
-                shown++;
+            }
+
+            // Pagination Controls for Loaded GUIs list
+            if (totalPages > 1) {
+                ButtonWidget prevBtn = ButtonWidget.builder(Text.literal("§e← Prev"), btn -> {
+                    guiListPage = Math.max(0, guiListPage - 1);
+                    this.init(); // Re-initialize list view
+                }).dimensions(cx - 150, y, 145, 18).build();
+                prevBtn.active = (guiListPage > 0);
+                addDrawableChild(prevBtn);
+
+                ButtonWidget nextBtn = ButtonWidget.builder(Text.literal("§eNext →"), btn -> {
+                    guiListPage = Math.min(totalPages - 1, guiListPage + 1);
+                    this.init(); // Re-initialize list view
+                }).dimensions(cx + 5, y, 145, 18).build();
+                nextBtn.active = (guiListPage < totalPages - 1);
+                addDrawableChild(nextBtn);
+                y += 22;
             }
 
             // ── Buttons ───────────────────────────────────────────────────────
@@ -192,6 +252,9 @@ public class GuiApiModMenuEntry implements ModMenuApi {
                 cfg.setDebugMode(debugMode);
                 cfg.setAllowCloseOnMove(allowCloseOnMove);
                 cfg.setAllowDelayedActions(allowDelayedActions);
+                cfg.setAllowStatusEffects(allowStatusEffects);
+                cfg.setLogCommands(logCommands);
+                cfg.setDefaultTickRate(defaultTickRate);
                 cfg.save();
                 MinecraftClient.getInstance().setScreen(parent);
             }).dimensions(cx - 105, height - 25, 100, 20).build());
@@ -199,7 +262,6 @@ public class GuiApiModMenuEntry implements ModMenuApi {
             addDrawableChild(ButtonWidget.builder(Text.literal("Reload GUIs"), btn -> {
                 var client = MinecraftClient.getInstance();
                 if (client.player != null) {
-                    // Send /guiapi reload as a chat command — works in-game only.
                     client.player.networkHandler.sendChatCommand("guiapi reload");
                     client.setScreen(parent);
                 } else {
@@ -215,10 +277,8 @@ public class GuiApiModMenuEntry implements ModMenuApi {
         @Override
         public void render(DrawContext ctx, int mouseX, int mouseY, float delta) {
             super.render(ctx, mouseX, mouseY, delta);
-            // Title
             ctx.drawCenteredTextWithShadow(textRenderer,
-                    Text.literal("§6GUI API §7Settings"), width / 2, 10, 0xFFFFFF);
-            // Divider above buttons
+                    Text.literal("§6GUI API §7Settings"), width / 2, 8, 0xFFFFFF);
             ctx.fill(width / 2 - 150, height - 32, width / 2 + 150, height - 31, 0x44FFFFFF);
         }
 
@@ -231,11 +291,9 @@ public class GuiApiModMenuEntry implements ModMenuApi {
 
         private void addToggle(int cx, int y, String key, String label, String tooltip,
                                boolean initial, java.util.function.Consumer<Boolean> onChange) {
-            // Label
             addDrawableChild(new TextWidget(cx - 150, y + 4, 200, 10,
                     Text.literal("§f" + label), textRenderer));
 
-            // Toggle button — shows ON/OFF, cycles on click
             ButtonWidget[] ref = new ButtonWidget[1];
             ref[0] = ButtonWidget.builder(toggleText(initial), btn -> {
                 boolean next = !btn.getMessage().getString().contains("ON");
