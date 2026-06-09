@@ -55,11 +55,8 @@ public class GuiActionParser {
                 act.type() == GuiDefinition.ActionType.ADD_VAR ||
                 act.type() == GuiDefinition.ActionType.SUB_VAR) {
                 list.add(prefix + ":" + act.var() + ":" + act.value());
-            } else if (act.type() == GuiDefinition.ActionType.NONE ||
-                       act.type() == GuiDefinition.ActionType.CLEAR_VARS ||
-                       act.type() == GuiDefinition.ActionType.CLEAR_EFFECTS ||
-                       act.type() == GuiDefinition.ActionType.REFRESH) {
-                // No-value actions: serialize without trailing colon
+            } else if (act.type() == GuiDefinition.ActionType.NONE) {
+                // NONE has no value — serialize without trailing colon
                 list.add(prefix);
             } else {
                 list.add(prefix + ":" + act.value());
