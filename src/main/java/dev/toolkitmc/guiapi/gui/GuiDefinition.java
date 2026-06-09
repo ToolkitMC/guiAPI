@@ -37,7 +37,13 @@ public class GuiDefinition {
         RUN_COMMAND, CLOSE, OPEN_GUI, MESSAGE, NEXT_PAGE, PREV_PAGE, GOTO_PAGE, SOUND,
         SET_VAR, ADD_VAR, SUB_VAR, RESET_VAR, CLEAR_VARS, REFRESH, TAKE_ITEM,
         SET_SCORE, ADD_SCORE, SUB_SCORE, ACTION_BAR,
-        ADD_EFFECT, REMOVE_EFFECT, CLEAR_EFFECTS;
+        ADD_EFFECT, REMOVE_EFFECT, CLEAR_EFFECTS,
+        /**
+         * No-op action. Does nothing. Requires {@code enable_none_action = true} in config
+         * (guiapi:experimental feature flag). If the flag is disabled, this action is
+         * silently skipped and a warning is logged.
+         */
+        NONE;
 
         public static ActionType fromString(String s) {
             return switch (s.toLowerCase()) {
@@ -63,7 +69,8 @@ public class GuiDefinition {
                 case "add_effect"     -> ADD_EFFECT;
                 case "remove_effect"  -> REMOVE_EFFECT;
                 case "clear_effects"  -> CLEAR_EFFECTS;
-                default            -> CLOSE;
+                case "none"           -> NONE;
+                default               -> CLOSE;
             };
         }
     }

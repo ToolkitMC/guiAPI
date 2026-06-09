@@ -116,6 +116,8 @@ public class GuiApiModMenuEntry implements ModMenuApi {
         private boolean showItemIdsDeveloper;
         private boolean muteClickErrors;
         private boolean enableCloseSound;
+        // guiapi:experimental
+        private boolean enableNoneAction;
 
         // Our 3 New Interactive Input Features
         private String  chatPrefix;
@@ -145,6 +147,7 @@ public class GuiApiModMenuEntry implements ModMenuApi {
             this.chatPrefix           = cfg.getChatPrefix();
             this.soundVolume          = cfg.getSoundVolume();
             this.commandExecuteMode   = cfg.getCommandExecuteMode();
+            this.enableNoneAction     = cfg.isEnableNoneAction();
         }
 
         private static String nextExecuteMode(String current) {
@@ -223,6 +226,7 @@ public class GuiApiModMenuEntry implements ModMenuApi {
                 cfg.setChatPrefix(chatPrefix);
                 cfg.setSoundVolume(soundVolume);
                 cfg.setCommandExecuteMode(commandExecuteMode);
+                cfg.setEnableNoneAction(enableNoneAction);
                 cfg.save();
                 MinecraftClient.getInstance().setScreen(parent);
             }).dimensions(cx - 105, height - 25, 100, 20).build());
@@ -307,6 +311,10 @@ public class GuiApiModMenuEntry implements ModMenuApi {
 
                 addScrollableToggle(cx, y, "Play close sound",
                         enableCloseSound, v -> enableCloseSound = v);
+                y += 22;
+
+                addScrollableToggle(cx, y, "§6[Experimental] §fEnable 'none' action",
+                        enableNoneAction, v -> enableNoneAction = v);
                 y += 22;
 
                 // ── 3 New Interactive Input Features ──
