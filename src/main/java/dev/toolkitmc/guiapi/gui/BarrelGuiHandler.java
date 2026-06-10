@@ -858,6 +858,18 @@ public class BarrelGuiHandler {
                 }
                 player.clearStatusEffects();
             }
+            case NONE -> {
+                // Experimental no-op action. Requires enable_none_action = true in config.
+                if (!dev.toolkitmc.guiapi.config.GuiApiConfig.INSTANCE.isEnableNoneAction()) {
+                    if (!dev.toolkitmc.guiapi.config.GuiApiConfig.INSTANCE.isMuteClickErrors()) {
+                        GuiApiMod.LOGGER.warn(
+                            "[GuiAPI] Action type 'none' is disabled. " +
+                            "Set enable_none_action=true in config/guiapi.json to enable it (guiapi:experimental)."
+                        );
+                    }
+                }
+                // Whether enabled or disabled: always no-op. Do nothing, do not break chain.
+            }
         }
         return false;
     }
