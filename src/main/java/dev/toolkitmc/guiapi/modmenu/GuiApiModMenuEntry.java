@@ -27,7 +27,135 @@ public class GuiApiModMenuEntry implements ModMenuApi {
 
     @Override
     public ConfigScreenFactory<?> getModConfigScreenFactory() {
-        return GuiApiConfigScreen::new;
+        return parent -> {
+            me.shedaniel.clothconfig2.api.ConfigBuilder builder = me.shedaniel.clothconfig2.api.ConfigBuilder.create()
+                .setParentScreen(parent)
+                .setTitle(Text.literal("GUI API Settings"));
+
+            me.shedaniel.clothconfig2.api.ConfigCategory generalCategory = builder.getOrCreateCategory(Text.literal("Settings"));
+            me.shedaniel.clothconfig2.api.ConfigCategory otherCategory = builder.getOrCreateCategory(Text.literal("Other"));
+            me.shedaniel.clothconfig2.api.ConfigCategory guisCategory = builder.getOrCreateCategory(Text.literal("Loaded GUIs"));
+
+            me.shedaniel.clothconfig2.api.ConfigEntryBuilder entryBuilder = builder.entryBuilder();
+
+            GuiApiConfig cfg = GuiApiConfig.INSTANCE;
+
+            // --- CATEGORY 1: Settings ---
+            generalCategory.addEntry(entryBuilder.startBooleanToggle(Text.literal("Allow run_with: console"), cfg.isAllowConsoleRunWith())
+                .setDefaultValue(true)
+                .setSaveConsumer(cfg::setAllowConsoleRunWith)
+                .setTooltip(Text.literal("Permit buttons to run commands with console (OP-level) permission."))
+                .build());
+
+            generalCategory.addEntry(entryBuilder.startBooleanToggle(Text.literal("Log unknown item IDs"), cfg.isLogUnknownItems())
+                .setDefaultValue(true)
+                .setSaveConsumer(cfg::setLogUnknownItems)
+                .setTooltip(Text.literal("Print a WARN to the log when a button uses an unrecognized item ID."))
+                .build());
+
+            generalCategory.addEntry(entryBuilder.startBooleanToggle(Text.literal("Log unknown sound IDs"), cfg.isLogUnknownSounds())
+                .setDefaultValue(true)
+                .setSaveConsumer(cfg::setLogUnknownSounds)
+                .setTooltip(Text.literal("Print a WARN to the log when a sound action uses an unrecognized sound ID."))
+                .build());
+
+            generalCategory.addEntry(entryBuilder.startBooleanToggle(Text.literal("Debug mode"), cfg.isDebugMode())
+                .setDefaultValue(false)
+                .setSaveConsumer(cfg::setDebugMode)
+                .setTooltip(Text.literal("Log GUI open/close, action execution and placeholder resolution to console."))
+                .build());
+
+            generalCategory.addEntry(entryBuilder.startBooleanToggle(Text.literal("Allow close_on_move"), cfg.isAllowCloseOnMove())
+                .setDefaultValue(true)
+                .setSaveConsumer(cfg::setAllowCloseOnMove)
+                .setTooltip(Text.literal("Globally permit menus to close automatically when players walk away."))
+                .build());
+
+            generalCategory.addEntry(entryBuilder.startBooleanToggle(Text.literal("Allow action delays"), cfg.isAllowDelayedActions())
+                .setDefaultValue(true)
+                .setSaveConsumer(cfg::setAllowDelayedActions)
+                .setTooltip(Text.literal("Globally permit action chains to execute with tick delays."))
+                .build());
+
+            generalCategory.addEntry(entryBuilder.startBooleanToggle(Text.literal("Allow status effects"), cfg.isAllowStatusEffects())
+                .setDefaultValue(true)
+                .setSaveConsumer(cfg::setAllowStatusEffects)
+                .setTooltip(Text.literal("Globally permit buttons and click actions to manage player potion effects."))
+                .build());
+
+            generalCategory.addEntry(entryBuilder.startBooleanToggle(Text.literal("Log command executions"), cfg.isLogCommands())
+                .setDefaultValue(false)
+                .setSaveConsumer(cfg::setLogCommands)
+                .setTooltip(Text.literal("Write a message to log console every time a GUI button runs a command."))
+                .build());
+
+            generalCategory.addEntry(entryBuilder.startIntSlider(Text.literal("Default Tick Rate"), cfg.getDefaultTickRate(), 1, 100)
+                .setDefaultValue(20)
+                .setSaveConsumer(cfg::setDefaultTickRate)
+                .setTooltip(Text.literal("Default tick rate for auto-refreshing menus."))
+                .build());
+
+            generalCategory.addEntry(entryBuilder.startIntSlider(Text.literal("Command permission level"), cfg.getPermissionLevel(), 0, 4)
+                .setDefaultValue(2)
+                .setSaveConsumer(cfg::setPermissionLevel)
+                .setTooltip(Text.literal("Permission level for running standard commands."))
+                .build());
+
+
+            // --- CATEGORY 2: Other ---
+            otherCategory.addEntry(entryBuilder.startBooleanToggle(Text.literal("Enable button glint"), cfg.isEnableButtonGlint())
+                .setDefaultValue(true)
+                .setSaveConsumer(cfg::setEnableButtonGlint)
+                .setTooltip(Text.literal("Toggles whether to show the glowing enchantment shine on buttons."))
+                .build());
+
+            otherCategory.addEntry(entryBuilder.startBooleanToggle(Text.literal("Show developer item IDs"), cfg.isShowItemIdsDeveloper())
+                .setDefaultValue(false)
+                .setSaveConsumer(cfg::setShowItemIdsDeveloper)
+                .setTooltip(Text.literal("Show technical item IDs in tooltips for designers."))
+                .build());
+
+            otherCategory.addEntry(entryBuilder.startBooleanToggle(Text.literal("Mute click errors"), cfg.isMuteClickErrors())
+                .setDefaultValue(false)
+                .setSaveConsumer(cfg::setMuteClickErrors)
+                .setTooltip(Text.literal("Silence warn messages when clicks fail to meet conditions or permissions."))
+                .build());
+
+            otherCategory.addEntry(entryBuilder.startBooleanToggle(Text.literal("Play close sound"), cfg.isEnableCloseSound())
+                .setDefaultValue(true)
+                .setSaveConsumer(cfg::setEnableCloseSound)
+                .setTooltip(Text.literal("Play a clean chest close sound when closing virtual GUIs."))
+                .build());
+
+            otherCategory.addEntry(entryBuilder.startTextField(Text.literal("Chat Prefix"), cfg.getChatPrefix())
+                .setDefaultValue("§8[§6GuiAPI§8] §f")
+                .setSaveConsumer(cfg::setChatPrefix)
+                .setTooltip(Text.literal("Custom prefix for all chat messages sent by GuiAPI."))
+                .build());
+
+            otherCategory.addEntry(entryBuilder.startIntSlider(Text.literal("Sound Volume (%)"), cfg.getSoundVolume(), 0, 100)
+                .setDefaultValue(100)
+                .setSaveConsumer(cfg::setSoundVolume)
+                .setTooltip(Text.literal("Global multiplier for mod UI sound volumes."))
+                .build());
+
+            otherCategory.addEntry(entryBuilder.startSelector(Text.literal("Message Execute Mode"), new String[]{"CHAT", "SYSTEM", "SILENT"}, cfg.getCommandExecuteMode())
+                .setDefaultValue("CHAT")
+                .setSaveConsumer(cfg::setCommandExecuteMode)
+                .setTooltip(Text.literal("Where button message feedback is routed."))
+                .build());
+
+
+            // --- CATEGORY 3: Loaded GUIs ---
+            guisCategory.addEntry(entryBuilder.startTextDescription(Text.literal("§eClick [Loaded GUIs List] below to open the Visual Dashboard!"))
+                .build());
+            
+            builder.setSavingRunnable(() -> {
+                cfg.save();
+            });
+
+            return builder.build();
+        };
     }
 
     // ── Helper methods for Actions string parsing & serialization ────────────
@@ -116,8 +244,6 @@ public class GuiApiModMenuEntry implements ModMenuApi {
         private boolean showItemIdsDeveloper;
         private boolean muteClickErrors;
         private boolean enableCloseSound;
-        // guiapi:experimental
-        private boolean enableNoneAction;
 
         // Our 3 New Interactive Input Features
         private String  chatPrefix;
@@ -147,7 +273,6 @@ public class GuiApiModMenuEntry implements ModMenuApi {
             this.chatPrefix           = cfg.getChatPrefix();
             this.soundVolume          = cfg.getSoundVolume();
             this.commandExecuteMode   = cfg.getCommandExecuteMode();
-            this.enableNoneAction     = cfg.isEnableNoneAction();
         }
 
         private static String nextExecuteMode(String current) {
@@ -179,12 +304,9 @@ public class GuiApiModMenuEntry implements ModMenuApi {
             scrollableElements.clear();
 
             // 1. Add persistent Tab Selectors (Fixed at Top)
-            ButtonWidget configTabBtn = ButtonWidget.builder(Text.literal(currentTab == Tab.CONFIG ? "§aSettings" : "§7Settings"), btn -> {
-                currentTab = Tab.CONFIG;
-                scrollY = 0;
-                this.init();
+            ButtonWidget configTabBtn = ButtonWidget.builder(Text.literal("§eSettings Screen"), btn -> {
+                MinecraftClient.getInstance().setScreen(getModConfigScreenFactory().create(parent));
             }).dimensions(cx - 125, 22, 80, 18).build();
-            configTabBtn.active = (currentTab != Tab.CONFIG);
             addDrawableChild(configTabBtn);
 
             ButtonWidget guisTabBtn = ButtonWidget.builder(Text.literal(currentTab == Tab.GUIS ? "§aLoaded GUIs" : "§7Loaded GUIs"), btn -> {
@@ -226,7 +348,6 @@ public class GuiApiModMenuEntry implements ModMenuApi {
                 cfg.setChatPrefix(chatPrefix);
                 cfg.setSoundVolume(soundVolume);
                 cfg.setCommandExecuteMode(commandExecuteMode);
-                cfg.setEnableNoneAction(enableNoneAction);
                 cfg.save();
                 MinecraftClient.getInstance().setScreen(parent);
             }).dimensions(cx - 105, height - 25, 100, 20).build());
@@ -311,10 +432,6 @@ public class GuiApiModMenuEntry implements ModMenuApi {
 
                 addScrollableToggle(cx, y, "Play close sound",
                         enableCloseSound, v -> enableCloseSound = v);
-                y += 22;
-
-                addScrollableToggle(cx, y, "§6[Experimental] §fEnable 'none' action",
-                        enableNoneAction, v -> enableNoneAction = v);
                 y += 22;
 
                 // ── 3 New Interactive Input Features ──
@@ -973,7 +1090,7 @@ public class GuiApiModMenuEntry implements ModMenuApi {
                         (btn.name().isEmpty() ? btn.item() : btn.name());
 
                 addDrawableChild(ButtonWidget.builder(Text.literal(labelText), b -> {
-                    MinecraftClient.getInstance().setScreen(new ButtonEditorScreen(this, index, btn));
+                    MinecraftClient.getInstance().setScreen(createButtonEditorScreen(this, index, btn, this));
                 }).dimensions(cx - 150, y, 300, 18).build());
 
                 y += 20;
@@ -1009,7 +1126,7 @@ public class GuiApiModMenuEntry implements ModMenuApi {
                         Optional.empty(), Optional.empty(), "1", false, false
                 );
                 buttonsList.add(newBtn);
-                MinecraftClient.getInstance().setScreen(new ButtonEditorScreen(this, buttonsList.size() - 1, newBtn));
+                MinecraftClient.getInstance().setScreen(createButtonEditorScreen(this, buttonsList.size() - 1, newBtn, this));
             }).dimensions(cx - 155, y, 100, 20).build());
 
             // Save & Back
@@ -1043,6 +1160,167 @@ public class GuiApiModMenuEntry implements ModMenuApi {
         }
     }
         // ── Button Properties Editor Screen ──────────────────────────────────────
+
+    public static Screen createButtonEditorScreen(Screen parent, int index, GuiDefinition.Button btn, ButtonListScreen listScreen) {
+        me.shedaniel.clothconfig2.api.ConfigBuilder builder = me.shedaniel.clothconfig2.api.ConfigBuilder.create()
+            .setParentScreen(parent)
+            .setTitle(Text.literal("Edit Button Properties"));
+
+        me.shedaniel.clothconfig2.api.ConfigCategory basicCat = builder.getOrCreateCategory(Text.literal("Basic"));
+        me.shedaniel.clothconfig2.api.ConfigCategory appearanceCat = builder.getOrCreateCategory(Text.literal("Appearance"));
+        me.shedaniel.clothconfig2.api.ConfigCategory logicCat = builder.getOrCreateCategory(Text.literal("Logic"));
+
+        me.shedaniel.clothconfig2.api.ConfigEntryBuilder entryBuilder = builder.entryBuilder();
+
+        final int[] slot = {btn.slot()};
+        final int[] amount = {1};
+        try { amount[0] = Integer.parseInt(btn.amount()); } catch (Exception ignored) {}
+        final int[] pageVal = {btn.page()};
+        final String[] itemText = {btn.item()};
+        final String[] nameText = {btn.name()};
+        final boolean[] glint = {btn.glint()};
+        final GuiDefinition.ClickType[] clickType = {btn.clickType()};
+        final String[] loreText = {String.join(";", btn.lore())};
+        final String[] actionsText = {serializeActionsToString(btn.actions())};
+        final String[] conditionText = {btn.condition().isPresent() ? btn.condition().get().type().name().toLowerCase() + ":" + btn.condition().get().value() : ""};
+
+        // --- Basic Category ---
+        basicCat.addEntry(entryBuilder.startIntSlider(Text.literal("Page (1-10)"), pageVal[0], 0, 9)
+            .setDefaultValue(0)
+            .setSaveConsumer(v -> pageVal[0] = v)
+            .build());
+
+        basicCat.addEntry(entryBuilder.startIntSlider(Text.literal("Slot Position"), slot[0], 0, 53)
+            .setDefaultValue(0)
+            .setSaveConsumer(v -> slot[0] = v)
+            .build());
+
+        basicCat.addEntry(entryBuilder.startIntSlider(Text.literal("Amount"), amount[0], 1, 99)
+            .setDefaultValue(1)
+            .setSaveConsumer(v -> amount[0] = v)
+            .build());
+
+        basicCat.addEntry(entryBuilder.startTextField(Text.literal("Item ID"), itemText[0])
+            .setDefaultValue("minecraft:stone")
+            .setSaveConsumer(v -> itemText[0] = v)
+            .build());
+
+        basicCat.addEntry(entryBuilder.startTextField(Text.literal("Display Name"), nameText[0])
+            .setDefaultValue("")
+            .setSaveConsumer(v -> nameText[0] = v)
+            .build());
+
+
+        // --- Appearance Category ---
+        appearanceCat.addEntry(entryBuilder.startBooleanToggle(Text.literal("Enable Glint"), glint[0])
+            .setDefaultValue(false)
+            .setSaveConsumer(v -> glint[0] = v)
+            .build());
+
+        appearanceCat.addEntry(entryBuilder.startTextField(Text.literal("Lore Lines (separated by ';')"), loreText[0])
+            .setDefaultValue("")
+            .setSaveConsumer(v -> loreText[0] = v)
+            .build());
+
+
+        // --- Logic Category ---
+        logicCat.addEntry(entryBuilder.startSelector(Text.literal("Click Type"), new String[]{"ANY", "LEFT", "RIGHT", "SHIFT"}, clickType[0].name())
+            .setDefaultValue("ANY")
+            .setSaveConsumer(v -> clickType[0] = GuiDefinition.ClickType.valueOf(v))
+            .build());
+
+        logicCat.addEntry(entryBuilder.startTextField(Text.literal("Condition (type:value)"), conditionText[0])
+            .setDefaultValue("")
+            .setSaveConsumer(v -> conditionText[0] = v)
+            .build());
+
+        logicCat.addEntry(entryBuilder.startTextField(Text.literal("Actions (separated by ';')"), actionsText[0])
+            .setDefaultValue("")
+            .setSaveConsumer(v -> actionsText[0] = v)
+            .build());
+
+        builder.setSavingRunnable(() -> {
+            int targetSlot = slot[0];
+            boolean duplicate = false;
+            for (int i = 0; i < listScreen.buttonsList.size(); i++) {
+                if (i == index) continue;
+                GuiDefinition.Button existing = listScreen.buttonsList.get(i);
+                if (existing.slot() == targetSlot && existing.page() == pageVal[0]) {
+                    duplicate = true;
+                    break;
+                }
+            }
+            if (duplicate) {
+                int emptySlot = targetSlot;
+                for (int s = 0; s < 54; s++) {
+                    boolean slotUsed = false;
+                    for (int i = 0; i < listScreen.buttonsList.size(); i++) {
+                        if (i == index) continue;
+                        GuiDefinition.Button existing = listScreen.buttonsList.get(i);
+                        if (existing.slot() == s && existing.page() == pageVal[0]) {
+                            slotUsed = true;
+                            break;
+                        }
+                    }
+                    if (!slotUsed) {
+                        emptySlot = s;
+                        break;
+                    }
+                }
+                targetSlot = emptySlot;
+            }
+
+            List<String> finalLore = new ArrayList<>();
+            if (!loreText[0].isEmpty()) {
+                for (String s : loreText[0].split(";")) {
+                    finalLore.add(s);
+                }
+            }
+
+            List<GuiDefinition.ButtonAction> finalActions = new ArrayList<>();
+            if (!actionsText[0].isEmpty()) {
+                for (String s : actionsText[0].split(";")) {
+                    finalActions.add(parseActionFromString(s));
+                }
+            }
+            if (finalActions.isEmpty()) {
+                finalActions.add(new GuiDefinition.ButtonAction(GuiDefinition.ActionType.NONE, ""));
+            }
+
+            Optional<GuiDefinition.ButtonCondition> finalCondition = Optional.empty();
+            if (!conditionText[0].isEmpty()) {
+                String[] condParts = conditionText[0].split(":", 2);
+                if (condParts.length == 2) {
+                    try {
+                        GuiDefinition.ConditionType ct = GuiDefinition.ConditionType.fromString(condParts[0]);
+                        finalCondition = Optional.of(new GuiDefinition.ButtonCondition(ct, condParts[1]));
+                    } catch (Exception ignored) {}
+                }
+            }
+
+            GuiDefinition.Button newBtn = new GuiDefinition.Button(
+                    targetSlot,
+                    pageVal[0],
+                    itemText[0],
+                    nameText[0],
+                    finalLore,
+                    glint[0],
+                    clickType[0],
+                    finalCondition,
+                    finalActions,
+                    btn.toggle(),
+                    btn.customModelData(),
+                    btn.itemModel(),
+                    String.valueOf(amount[0]),
+                    btn.hideTooltip(),
+                    btn.hideAdditionalTooltip()
+            );
+
+            listScreen.updateButton(index, newBtn);
+        });
+
+        return builder.build();
+    }
 
     static class ButtonEditorScreen extends Screen {
         private enum Tab {
@@ -1151,6 +1429,36 @@ public class GuiApiModMenuEntry implements ModMenuApi {
             addDrawableChild(ButtonWidget.builder(Text.literal("Apply"), b -> {
                 saveCurrentTabFields();
 
+                // Prevent duplicate slot on the same page by finding the next empty slot
+                boolean duplicate = false;
+                for (int i = 0; i < parent.buttonsList.size(); i++) {
+                    if (i == index) continue;
+                    GuiDefinition.Button existing = parent.buttonsList.get(i);
+                    if (existing.slot() == slot && existing.page() == pageVal) {
+                        duplicate = true;
+                        break;
+                    }
+                }
+                if (duplicate) {
+                    int emptySlot = slot;
+                    for (int s = 0; s < 54; s++) {
+                        boolean slotUsed = false;
+                        for (int i = 0; i < parent.buttonsList.size(); i++) {
+                            if (i == index) continue;
+                            GuiDefinition.Button existing = parent.buttonsList.get(i);
+                            if (existing.slot() == s && existing.page() == pageVal) {
+                                slotUsed = true;
+                                break;
+                            }
+                        }
+                        if (!slotUsed) {
+                            emptySlot = s;
+                            break;
+                        }
+                    }
+                    slot = emptySlot;
+                }
+
                 // Build Lore list
                 List<String> finalLore = new ArrayList<>();
                 if (!loreText.isEmpty()) {
@@ -1167,7 +1475,7 @@ public class GuiApiModMenuEntry implements ModMenuApi {
                     }
                 }
                 if (finalActions.isEmpty()) {
-                    finalActions.add(new GuiDefinition.ButtonAction(GuiDefinition.ActionType.CLOSE, ""));
+                    finalActions.add(new GuiDefinition.ButtonAction(GuiDefinition.ActionType.NONE, ""));
                 }
 
                 // Build Condition

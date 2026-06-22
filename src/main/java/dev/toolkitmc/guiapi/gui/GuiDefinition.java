@@ -20,6 +20,21 @@ public class GuiDefinition {
     /**
      * Which mouse button triggers this button's actions.
      */
+    public enum ContainerType {
+        BARREL, PLAYER, CHEST, ENDER_CHEST, CHEST_MINECART;
+        
+        public static ContainerType fromString(String s) {
+            if (s == null) return BARREL;
+            return switch (s.toUpperCase()) {
+                case "PLAYER"         -> PLAYER;
+                case "CHEST"          -> CHEST;
+                case "ENDER_CHEST"    -> ENDER_CHEST;
+                case "CHEST_MINECART" -> CHEST_MINECART;
+                default               -> BARREL;
+            };
+        }
+    }
+
     public enum ClickType {
         ANY, LEFT, RIGHT, SHIFT;
 
@@ -37,13 +52,7 @@ public class GuiDefinition {
         RUN_COMMAND, CLOSE, OPEN_GUI, MESSAGE, NEXT_PAGE, PREV_PAGE, GOTO_PAGE, SOUND,
         SET_VAR, ADD_VAR, SUB_VAR, RESET_VAR, CLEAR_VARS, REFRESH, TAKE_ITEM,
         SET_SCORE, ADD_SCORE, SUB_SCORE, ACTION_BAR,
-        ADD_EFFECT, REMOVE_EFFECT, CLEAR_EFFECTS,
-        /**
-         * No-op action. Does nothing. Requires {@code enable_none_action = true} in config
-         * (guiapi:experimental feature flag). If the flag is disabled, this action is
-         * silently skipped and a warning is logged.
-         */
-        NONE;
+        ADD_EFFECT, REMOVE_EFFECT, CLEAR_EFFECTS, NONE, ANVIL_INPUT;
 
         public static ActionType fromString(String s) {
             return switch (s.toLowerCase()) {
@@ -70,7 +79,8 @@ public class GuiDefinition {
                 case "remove_effect"  -> REMOVE_EFFECT;
                 case "clear_effects"  -> CLEAR_EFFECTS;
                 case "none"           -> NONE;
-                default               -> CLOSE;
+                case "anvil_input"    -> ANVIL_INPUT;
+                default            -> NONE;
             };
         }
     }
@@ -209,6 +219,7 @@ public class GuiDefinition {
     private final Optional<FillerConfig> filler;
     private final int tickRate;
     private final boolean closeOnMove;
+    private final ContainerType containerType;
 
     // ── Constructor ──────────────────────────────────────────────────────────
 
@@ -219,6 +230,17 @@ public class GuiDefinition {
                           Optional<FillerConfig> filler,
                           int tickRate,
                           boolean closeOnMove) {
+        this(id, title, rows, buttons, onOpen, onClose, filler, tickRate, closeOnMove, ContainerType.BARREL);
+    }
+
+    public GuiDefinition(Identifier id, String title, int rows,
+                          List<Button> buttons,
+                          List<ButtonAction> onOpen,
+                          List<ButtonAction> onClose,
+                          Optional<FillerConfig> filler,
+                          int tickRate,
+                          boolean closeOnMove,
+                          ContainerType containerType) {
         this.id        = id;
         this.title     = title;
         this.rows      = rows;
@@ -229,6 +251,7 @@ public class GuiDefinition {
         this.filler    = filler;
         this.tickRate  = tickRate;
         this.closeOnMove = closeOnMove;
+        this.containerType = containerType;
     }
 
     public static GuiDefinition create(Identifier id, String title, int rows,
@@ -238,7 +261,18 @@ public class GuiDefinition {
                                        Optional<FillerConfig> filler,
                                        int tickRate,
                                        boolean closeOnMove) {
-        return new GuiDefinition(id, title, rows, buttons, onOpen, onClose, filler, tickRate, closeOnMove);
+        return new GuiDefinition(id, title, rows, buttons, onOpen, onClose, filler, tickRate, closeOnMove, ContainerType.BARREL);
+    }
+
+    public static GuiDefinition create(Identifier id, String title, int rows,
+                                       List<Button> buttons,
+                                       List<ButtonAction> onOpen,
+                                       List<ButtonAction> onClose,
+                                       Optional<FillerConfig> filler,
+                                       int tickRate,
+                                       boolean closeOnMove,
+                                       ContainerType containerType) {
+        return new GuiDefinition(id, title, rows, buttons, onOpen, onClose, filler, tickRate, closeOnMove, containerType);
     }
 
     // ── Parser ───────────────────────────────────────────────────────────────
@@ -246,6 +280,9 @@ public class GuiDefinition {
     public static GuiDefinition parse(Identifier id, JsonObject obj) {
         String title = obj.has("title") ? obj.get("title").getAsString() : "GUI";
         int rows = obj.has("rows") ? Math.clamp(obj.get("rows").getAsInt(), 1, 6) : 3;
+        ContainerType containerType = obj.has("container_type")
+                ? ContainerType.fromString(obj.get("container_type").getAsString())
+                : ContainerType.BARREL;
 
         List<Button> buttons = new ArrayList<>();
         if (obj.has("buttons") && obj.get("buttons").isJsonArray()) {
@@ -271,7 +308,7 @@ public class GuiDefinition {
         int tickRate = obj.has("tick_rate") ? obj.get("tick_rate").getAsInt() : dev.toolkitmc.guiapi.config.GuiApiConfig.INSTANCE.getDefaultTickRate();
         boolean closeOnMove = obj.has("close_on_move") && obj.get("close_on_move").getAsBoolean();
 
-        return new GuiDefinition(id, title, rows, buttons, onOpen, onClose, filler, tickRate, closeOnMove);
+        return new GuiDefinition(id, title, rows, buttons, onOpen, onClose, filler, tickRate, closeOnMove, containerType);
     }
 
     private static List<ButtonAction> parseActionList(JsonObject obj, String key) {

@@ -85,6 +85,20 @@ public class BarrelGuiHandler {
         open(player, def, 0);
     }
 
+    private static boolean hasCustomNbt(net.minecraft.entity.Entity entity, String key) {
+        NbtCompound nbt = new NbtCompound();
+        entity.writeNbt(nbt);
+        return nbt.contains(key) && nbt.getBoolean(key);
+    }
+
+    private static SimpleInventory populateChestMinecart(ServerPlayerEntity player, GuiDefinition def, int page, net.minecraft.entity.vehicle.ChestMinecartEntity cart) {
+        SimpleInventory inv = buildInventory(player, def, page, 27);
+        for (int i = 0; i < 27; i++) {
+            cart.setStack(i, inv.getStack(i));
+        }
+        return inv;
+    }
+
     public static void open(ServerPlayerEntity player, GuiDefinition def, int page) {
         page = Math.clamp(page, 0, def.getPageCount() - 1);
         int rows = Math.clamp(def.getRows(), 1, 6);
@@ -94,9 +108,33 @@ public class BarrelGuiHandler {
         // triggered during screen open (edge case) already sees the correct state.
         OPEN_GUIS.put(player.getUuid(), new PlayerTickState(def, page, player));
         debug("open: player={} gui={} page={}", player.getNameForScoreboard(), def.getId(), page);
-        SimpleInventory inv = buildInventory(player, def, page, rows * 9);
+
+        SimpleInventory inv;
+        int finalRows = rows;
+        if (def.getContainerType() == GuiDefinition.ContainerType.CHEST_MINECART) {
+            finalRows = 3;
+            List<net.minecraft.entity.vehicle.ChestMinecartEntity> minecarts = player.getServerWorld().getEntitiesByClass(
+                net.minecraft.entity.vehicle.ChestMinecartEntity.class,
+                player.getBoundingBox().expand(8.0),
+                cart -> cart.getCommandTags().contains("MyGUI") || hasCustomNbt(cart, "MyGUI")
+            );
+            if (!minecarts.isEmpty()) {
+                inv = populateChestMinecart(player, def, page, minecarts.get(0));
+            } else {
+                inv = buildInventory(player, def, page, 27);
+            }
+        } else if (def.getContainerType() == GuiDefinition.ContainerType.ENDER_CHEST) {
+            finalRows = 3;
+            inv = buildInventory(player, def, page, 27);
+        } else if (def.getContainerType() == GuiDefinition.ContainerType.PLAYER) {
+            finalRows = 4;
+            inv = buildInventory(player, def, page, 36);
+        } else {
+            inv = buildInventory(player, def, page, rows * 9);
+        }
 
         String resolvedTitle = resolve(def.getTitle(), player, def, page);
+        final int openRows = finalRows;
 
         player.openHandledScreen(new NamedScreenHandlerFactory() {
             @Override
@@ -107,7 +145,7 @@ public class BarrelGuiHandler {
             @Override
             public net.minecraft.screen.ScreenHandler createMenu(
                     int syncId, PlayerInventory playerInv, PlayerEntity p) {
-                return new GuiScreenHandler(rowsToType(rows), syncId, playerInv, inv, rows, def, finalPage);
+                return new GuiScreenHandler(rowsToType(openRows), syncId, playerInv, inv, openRows, def, finalPage);
             }
         });
 
@@ -647,10 +685,25 @@ public class BarrelGuiHandler {
                     server.getCommandManager().executeWithPrefix(player.getCommandSource(), cmd);
                 }
             }
-            case CLOSE -> {
-                player.closeHandledScreen();
-                return true;
+            case NONE -> { return true; }
+            case ANVIL_INPUT -> {
+                String resolved = resolve(action.value(), player, def, currentPage);
+                String[] parts = resolved.split(":", 2);
+                if (parts.length == 2) {
+                    String varKey = parts[0];
+                    String anvilTitle = parts[1];
+                    final Identifier previousGuiId = def.getId();
+                    final int previousPage = currentPage;
+
+                    AnvilGuiHandler.openInput(player, anvilTitle, "Type here...", (sp, text) -> {
+                        GuiVarStore.INSTANCE.put(sp.getUuid(), varKey, text);
+                        dev.toolkitmc.guiapi.loader.GuiRegistry.INSTANCE.get(previousGuiId)
+                                .ifPresent(target -> open(sp, target, previousPage));
+                    });
+                }
             }
+            case NONE -> { return true; }
+            case CLOSE -> {
             case OPEN_GUI -> {
                 navigateAway(player);
                 player.closeHandledScreen();
@@ -816,10 +869,29 @@ public class BarrelGuiHandler {
                 String[] parts = resolved.split(":");
                 if (parts.length >= 2) {
                     try {
-                        String effectId = parts[0];
-                        int durationSecs = Integer.parseInt(parts[1]);
-                        int amp = parts.length > 2 ? Integer.parseInt(parts[2]) : 0;
-                        boolean particles = parts.length <= 3 || Boolean.parseBoolean(parts[3]);
+                        String effectId;
+                        int durationIdx = 1;
+
+                        boolean hasNamespace = false;
+                        if (parts.length >= 3) {
+                            try {
+                                Integer.parseInt(parts[1]);
+                            } catch (NumberFormatException e) {
+                                hasNamespace = true;
+                            }
+                        }
+
+                        if (hasNamespace) {
+                            effectId = parts[0] + ":" + parts[1];
+                            durationIdx = 2;
+                        } else {
+                            effectId = parts[0];
+                            durationIdx = 1;
+                        }
+
+                        int durationSecs = Integer.parseInt(parts[durationIdx]);
+                        int amp = parts.length > (durationIdx + 1) ? Integer.parseInt(parts[durationIdx + 1]) : 0;
+                        boolean particles = parts.length <= (durationIdx + 2) || Boolean.parseBoolean(parts[durationIdx + 2]);
 
                         Identifier effIdent = Identifier.tryParse(effectId);
                         if (effIdent != null && Registries.STATUS_EFFECT.containsId(effIdent)) {
@@ -857,18 +929,6 @@ public class BarrelGuiHandler {
                     break;
                 }
                 player.clearStatusEffects();
-            }
-            case NONE -> {
-                // Experimental no-op action. Requires enable_none_action = true in config.
-                if (!dev.toolkitmc.guiapi.config.GuiApiConfig.INSTANCE.isEnableNoneAction()) {
-                    if (!dev.toolkitmc.guiapi.config.GuiApiConfig.INSTANCE.isMuteClickErrors()) {
-                        GuiApiMod.LOGGER.warn(
-                            "[GuiAPI] Action type 'none' is disabled. " +
-                            "Set enable_none_action=true in config/guiapi.json to enable it (guiapi:experimental)."
-                        );
-                    }
-                }
-                // Whether enabled or disabled: always no-op. Do nothing, do not break chain.
             }
         }
         return false;

@@ -44,12 +44,6 @@ public final class GuiApiConfig {
     private int     soundVolume          = 100;                 // 9. New Config
     private String  commandExecuteMode   = "CHAT";              // 10. New Config
 
-    /**
-     * guiapi:experimental — enables the {@code none} action type.
-     * When {@code false}, any button using {@code type: "none"} is skipped with a warning.
-     */
-    private boolean enableNoneAction     = false;
-
     private GuiApiConfig() {}
 
     // ── Load / Save ──────────────────────────────────────────────────────────
@@ -98,8 +92,6 @@ public final class GuiApiConfig {
                 soundVolume = Math.clamp(obj.get("sound_volume").getAsInt(), 0, 100);
             if (obj.has("command_execute_mode"))
                 commandExecuteMode = obj.get("command_execute_mode").getAsString();
-            if (obj.has("enable_none_action"))
-                enableNoneAction = obj.get("enable_none_action").getAsBoolean();
 
         } catch (IOException e) {
             GuiApiMod.LOGGER.error("[GuiAPI] Failed to load config: {}", e.getMessage());
@@ -125,7 +117,6 @@ public final class GuiApiConfig {
         obj.addProperty("chat_prefix",             chatPrefix);
         obj.addProperty("sound_volume",            soundVolume);
         obj.addProperty("command_execute_mode",    commandExecuteMode);
-        obj.addProperty("enable_none_action",      enableNoneAction);
         try {
             Files.writeString(CONFIG_PATH, GSON.toJson(obj));
         } catch (IOException e) {
@@ -183,8 +174,4 @@ public final class GuiApiConfig {
 
     public String getCommandExecuteMode() { return commandExecuteMode; }
     public void setCommandExecuteMode(String v) { commandExecuteMode = v; }
-
-    /** guiapi:experimental — {@code none} action type gate. */
-    public boolean isEnableNoneAction() { return enableNoneAction; }
-    public void setEnableNoneAction(boolean v) { enableNoneAction = v; }
 }
