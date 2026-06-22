@@ -61,13 +61,11 @@
         "glint_on": true,
         "actions_on": [
           { "type": "sound", "value": "minecraft:block.anvil.land:0.5:1.0" },
-          { "type": "message", "value": "§cPvP disabled, {player}." },
-          { "type": "refresh", "value": "" }
+          { "type": "message", "value": "§cPvP disabled, {player}." }
         ],
         "actions_off": [
           { "type": "sound", "value": "minecraft:entity.player.attack.sweep" },
-          { "type": "message", "value": "§aPvP enabled, {player}!" },
-          { "type": "refresh", "value": "" }
+          { "type": "message", "value": "§aPvP enabled, {player}!" }
         ]
       }
     },
