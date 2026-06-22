@@ -685,7 +685,9 @@ public class BarrelGuiHandler {
                     server.getCommandManager().executeWithPrefix(player.getCommandSource(), cmd);
                 }
             }
-            case NONE -> { return true; }
+            case NONE -> {
+                return true;
+            }
             case ANVIL_INPUT -> {
                 String resolved = resolve(action.value(), player, def, currentPage);
                 String[] parts = resolved.split(":", 2);
@@ -702,8 +704,10 @@ public class BarrelGuiHandler {
                     });
                 }
             }
-            case NONE -> { return true; }
             case CLOSE -> {
+                player.closeHandledScreen();
+                return true;
+            }
             case OPEN_GUI -> {
                 navigateAway(player);
                 player.closeHandledScreen();
