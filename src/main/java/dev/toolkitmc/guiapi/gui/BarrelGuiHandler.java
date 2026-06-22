@@ -85,11 +85,6 @@ public class BarrelGuiHandler {
         open(player, def, 0);
     }
 
-    private static boolean hasCustomNbt(net.minecraft.entity.Entity entity, String key) {
-        NbtCompound nbt = new NbtCompound();
-        entity.saveSelfNbt(nbt);
-        return nbt.contains(key) && nbt.getBoolean(key).orElse(false);
-    }
 
     private static SimpleInventory populateChestMinecart(ServerPlayerEntity player, GuiDefinition def, int page, net.minecraft.entity.vehicle.ChestMinecartEntity cart) {
         SimpleInventory inv = buildInventory(player, def, page, 27);
@@ -117,7 +112,7 @@ public class BarrelGuiHandler {
             List<net.minecraft.entity.vehicle.ChestMinecartEntity> minecarts = world.getEntitiesByClass(
                 net.minecraft.entity.vehicle.ChestMinecartEntity.class,
                 player.getBoundingBox().expand(8.0),
-                cart -> cart.getCommandTags().contains("MyGUI") || hasCustomNbt(cart, "MyGUI")
+                cart -> cart.getCommandTags().contains("MyGUI")
             );
             if (!minecarts.isEmpty()) {
                 inv = populateChestMinecart(player, def, page, minecarts.get(0));
