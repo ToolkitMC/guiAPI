@@ -10,8 +10,6 @@ import net.minecraft.screen.ScreenHandlerContext;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.Text;
 
-import java.util.Optional;
-
 public class AnvilGuiHandler {
 
     public interface AnvilCallback {
@@ -26,13 +24,11 @@ public class AnvilGuiHandler {
             return val != null ? val : "";
         } catch (Exception e) {
             try {
-                // Fallback to common Yarn mapping fields for newItemName
                 java.lang.reflect.Field field = AnvilScreenHandler.class.getDeclaredField("field_30755");
                 field.setAccessible(true);
                 String val = (String) field.get(handler);
                 return val != null ? val : "";
             } catch (Exception e2) {
-                // Ultimate fallback to output slot stack name
                 ItemStack stack = handler.getSlot(2).getStack();
                 if (!stack.isEmpty()) {
                     return stack.getName().getString();
@@ -51,7 +47,9 @@ public class AnvilGuiHandler {
 
             @Override
             public net.minecraft.screen.ScreenHandler createMenu(int syncId, PlayerInventory playerInv, PlayerEntity p) {
-                return new AnvilScreenHandler(syncId, playerInv, ScreenHandlerContext.EMPTY) {
+                AnvilScreenHandler handler = new AnvilScreenHandler(syncId, playerInv, ScreenHandlerContext.EMPTY) {
+                    private boolean initializing = false;
+
                     @Override
                     public boolean canUse(PlayerEntity player) {
                         return true;
@@ -59,7 +57,7 @@ public class AnvilGuiHandler {
 
                     @Override
                     public void onSlotClick(int slotIndex, int button, net.minecraft.screen.slot.SlotActionType actionType, PlayerEntity playerEntity) {
-                        if (slotIndex == 2) { // Output slot
+                        if (slotIndex == 2) {
                             String text = getNewItemNameReflected(this);
                             if (playerEntity instanceof ServerPlayerEntity sp) {
                                 sp.closeHandledScreen();
@@ -69,20 +67,21 @@ public class AnvilGuiHandler {
                         }
                         super.onSlotClick(slotIndex, button, actionType, playerEntity);
                     }
-                    
+
                     @Override
                     public void updateResult() {
-                        ItemStack paper = new ItemStack(Items.PAPER);
-                        paper.set(net.minecraft.component.DataComponentTypes.CUSTOM_NAME, Text.literal(defaultText));
-                        this.input.setStack(0, paper);
-                        
-                        ItemStack output = new ItemStack(Items.PAPER);
-                        output.set(net.minecraft.component.DataComponentTypes.CUSTOM_NAME, Text.literal(getNewItemNameReflected(this)));
-                        this.output.setStack(0, output);
-                        
-                        this.sendContentUpdates();
+                        // Do not call setStack here — it triggers markDirty → onSlotChange → updateResult loop.
+                        // Output slot is managed by super; just update the display name on the output.
+                        super.updateResult();
                     }
                 };
+
+                // Set the input item once, outside of updateResult, to avoid the recursive loop.
+                ItemStack paper = new ItemStack(Items.PAPER);
+                paper.set(net.minecraft.component.DataComponentTypes.CUSTOM_NAME, Text.literal(defaultText));
+                handler.getSlot(0).setStack(paper);
+
+                return handler;
             }
         });
     }
