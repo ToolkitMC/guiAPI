@@ -305,7 +305,7 @@ public class GuiApiModMenuEntry implements ModMenuApi {
 
             // 1. Add persistent Tab Selectors (Fixed at Top)
             ButtonWidget configTabBtn = ButtonWidget.builder(Text.literal("§eSettings Screen"), btn -> {
-                MinecraftClient.getInstance().setScreen(getModConfigScreenFactory().create(parent));
+                MinecraftClient.getInstance().setScreen(new GuiApiModMenuEntry().getModConfigScreenFactory().create(parent));
             }).dimensions(cx - 125, 22, 80, 18).build();
             addDrawableChild(configTabBtn);
 

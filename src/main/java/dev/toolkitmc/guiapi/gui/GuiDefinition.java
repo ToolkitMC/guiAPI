@@ -502,6 +502,7 @@ public class GuiDefinition {
     public Optional<FillerConfig> getFiller() { return filler; }
     public int getTickRate()               { return tickRate; }
     public boolean isCloseOnMove()         { return closeOnMove; }
+    public ContainerType getContainerType() { return containerType; }
 
     /** Returns only buttons belonging to the given page. */
     public List<Button> getButtonsForPage(int page) {

@@ -85,11 +85,6 @@ public class BarrelGuiHandler {
         open(player, def, 0);
     }
 
-    private static boolean hasCustomNbt(net.minecraft.entity.Entity entity, String key) {
-        NbtCompound nbt = new NbtCompound();
-        entity.writeNbt(nbt);
-        return nbt.contains(key) && nbt.getBoolean(key);
-    }
 
     private static SimpleInventory populateChestMinecart(ServerPlayerEntity player, GuiDefinition def, int page, net.minecraft.entity.vehicle.ChestMinecartEntity cart) {
         SimpleInventory inv = buildInventory(player, def, page, 27);
@@ -113,10 +108,11 @@ public class BarrelGuiHandler {
         int finalRows = rows;
         if (def.getContainerType() == GuiDefinition.ContainerType.CHEST_MINECART) {
             finalRows = 3;
-            List<net.minecraft.entity.vehicle.ChestMinecartEntity> minecarts = player.getServerWorld().getEntitiesByClass(
+            net.minecraft.server.world.ServerWorld world = (net.minecraft.server.world.ServerWorld) player.getWorld();
+            List<net.minecraft.entity.vehicle.ChestMinecartEntity> minecarts = world.getEntitiesByClass(
                 net.minecraft.entity.vehicle.ChestMinecartEntity.class,
                 player.getBoundingBox().expand(8.0),
-                cart -> cart.getCommandTags().contains("MyGUI") || hasCustomNbt(cart, "MyGUI")
+                cart -> cart.getCommandTags().contains("MyGUI")
             );
             if (!minecarts.isEmpty()) {
                 inv = populateChestMinecart(player, def, page, minecarts.get(0));
@@ -685,7 +681,9 @@ public class BarrelGuiHandler {
                     server.getCommandManager().executeWithPrefix(player.getCommandSource(), cmd);
                 }
             }
-            case NONE -> { return true; }
+            case NONE -> {
+                return true;
+            }
             case ANVIL_INPUT -> {
                 String resolved = resolve(action.value(), player, def, currentPage);
                 String[] parts = resolved.split(":", 2);
@@ -696,14 +694,16 @@ public class BarrelGuiHandler {
                     final int previousPage = currentPage;
 
                     AnvilGuiHandler.openInput(player, anvilTitle, "Type here...", (sp, text) -> {
-                        GuiVarStore.INSTANCE.put(sp.getUuid(), varKey, text);
+                        GuiVarStore.INSTANCE.set(sp.getUuid(), varKey, text);
                         dev.toolkitmc.guiapi.loader.GuiRegistry.INSTANCE.get(previousGuiId)
                                 .ifPresent(target -> open(sp, target, previousPage));
                     });
                 }
             }
-            case NONE -> { return true; }
             case CLOSE -> {
+                player.closeHandledScreen();
+                return true;
+            }
             case OPEN_GUI -> {
                 navigateAway(player);
                 player.closeHandledScreen();
