@@ -87,8 +87,8 @@ public class BarrelGuiHandler {
 
     private static boolean hasCustomNbt(net.minecraft.entity.Entity entity, String key) {
         NbtCompound nbt = new NbtCompound();
-        entity.writeNbt(nbt);
-        return nbt.contains(key) && nbt.getBoolean(key);
+        entity.saveNbt(nbt);
+        return nbt.contains(key) && nbt.getBoolean(key).orElse(false);
     }
 
     private static SimpleInventory populateChestMinecart(ServerPlayerEntity player, GuiDefinition def, int page, net.minecraft.entity.vehicle.ChestMinecartEntity cart) {
@@ -113,7 +113,8 @@ public class BarrelGuiHandler {
         int finalRows = rows;
         if (def.getContainerType() == GuiDefinition.ContainerType.CHEST_MINECART) {
             finalRows = 3;
-            List<net.minecraft.entity.vehicle.ChestMinecartEntity> minecarts = player.getServerWorld().getEntitiesByClass(
+            net.minecraft.server.world.ServerWorld world = (net.minecraft.server.world.ServerWorld) player.getWorld();
+            List<net.minecraft.entity.vehicle.ChestMinecartEntity> minecarts = world.getEntitiesByClass(
                 net.minecraft.entity.vehicle.ChestMinecartEntity.class,
                 player.getBoundingBox().expand(8.0),
                 cart -> cart.getCommandTags().contains("MyGUI") || hasCustomNbt(cart, "MyGUI")
@@ -698,7 +699,7 @@ public class BarrelGuiHandler {
                     final int previousPage = currentPage;
 
                     AnvilGuiHandler.openInput(player, anvilTitle, "Type here...", (sp, text) -> {
-                        GuiVarStore.INSTANCE.put(sp.getUuid(), varKey, text);
+                        GuiVarStore.INSTANCE.set(sp.getUuid(), varKey, text);
                         dev.toolkitmc.guiapi.loader.GuiRegistry.INSTANCE.get(previousGuiId)
                                 .ifPresent(target -> open(sp, target, previousPage));
                     });
