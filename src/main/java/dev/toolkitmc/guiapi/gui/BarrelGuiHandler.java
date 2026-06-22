@@ -87,7 +87,7 @@ public class BarrelGuiHandler {
 
     private static boolean hasCustomNbt(net.minecraft.entity.Entity entity, String key) {
         NbtCompound nbt = new NbtCompound();
-        entity.saveNbt(nbt);
+        entity.saveSelfNbt(nbt);
         return nbt.contains(key) && nbt.getBoolean(key).orElse(false);
     }
 
