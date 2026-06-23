@@ -44,6 +44,9 @@ public final class GuiApiConfig {
     private int     soundVolume          = 100;                 // 9. New Config
     private String  commandExecuteMode   = "CHAT";              // 10. New Config
 
+    private boolean allowGiveItem  = true;  // 11. give_item action guard
+    private boolean allowBroadcast = true;  // 12. broadcast action guard
+
     private GuiApiConfig() {}
 
     // ── Load / Save ──────────────────────────────────────────────────────────
@@ -92,6 +95,10 @@ public final class GuiApiConfig {
                 soundVolume = Math.clamp(obj.get("sound_volume").getAsInt(), 0, 100);
             if (obj.has("command_execute_mode"))
                 commandExecuteMode = obj.get("command_execute_mode").getAsString();
+            if (obj.has("allow_give_item"))
+                allowGiveItem = obj.get("allow_give_item").getAsBoolean();
+            if (obj.has("allow_broadcast"))
+                allowBroadcast = obj.get("allow_broadcast").getAsBoolean();
 
         } catch (IOException e) {
             GuiApiMod.LOGGER.error("[GuiAPI] Failed to load config: {}", e.getMessage());
@@ -117,6 +124,8 @@ public final class GuiApiConfig {
         obj.addProperty("chat_prefix",             chatPrefix);
         obj.addProperty("sound_volume",            soundVolume);
         obj.addProperty("command_execute_mode",    commandExecuteMode);
+        obj.addProperty("allow_give_item",         allowGiveItem);
+        obj.addProperty("allow_broadcast",         allowBroadcast);
         try {
             Files.writeString(CONFIG_PATH, GSON.toJson(obj));
         } catch (IOException e) {
@@ -174,4 +183,10 @@ public final class GuiApiConfig {
 
     public String getCommandExecuteMode() { return commandExecuteMode; }
     public void setCommandExecuteMode(String v) { commandExecuteMode = v; }
+
+    public boolean isAllowGiveItem()          { return allowGiveItem; }
+    public void setAllowGiveItem(boolean v)   { allowGiveItem = v; }
+
+    public boolean isAllowBroadcast()         { return allowBroadcast; }
+    public void setAllowBroadcast(boolean v)  { allowBroadcast = v; }
 }

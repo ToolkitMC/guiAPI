@@ -72,6 +72,19 @@ public class GuiCommand {
                 .then(CommandManager.literal("help")
                     .executes(GuiCommand::showHelp))
 
+                .then(CommandManager.literal("info")
+                    .then(CommandManager.argument("id", IdentifierArgumentType.identifier())
+                        .suggests((ctx, builder) -> {
+                            String input = builder.getRemainingLowerCase();
+                            GuiRegistry.INSTANCE.getAll().keySet().stream()
+                                    .map(Identifier::toString)
+                                    .filter(s -> s.contains(input))
+                                    .forEach(builder::suggest);
+                            return builder.buildFuture();
+                        })
+                        .executes(GuiCommand::infoGui))
+                )
+
                 .then(CommandManager.literal("var")
                     .then(CommandManager.literal("get")
                         .then(CommandManager.argument("target", EntityArgumentType.player())
@@ -175,10 +188,61 @@ public class GuiCommand {
         return count;
     }
 
+    private static int infoGui(CommandContext<ServerCommandSource> ctx) {
+        Identifier id = IdentifierArgumentType.getIdentifier(ctx, "id");
+        GuiDefinition def = GuiRegistry.INSTANCE.get(id).orElse(null);
+        if (def == null) {
+            ctx.getSource().sendError(Text.literal("[GuiAPI] GUI not found: " + id));
+            return 0;
+        }
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("[GuiAPI] Info: ").append(id).append("\n");
+        sb.append("  rows=").append(def.getRows())
+          .append("  pages=").append(def.getPageCount())
+          .append("  buttons=").append(def.getButtons().size())
+          .append("  tick_rate=").append(def.getTickRate())
+          .append("  close_on_move=").append(def.isCloseOnMove())
+          .append("  container=").append(def.getContainerType().name().toLowerCase())
+          .append("\n");
+        sb.append("  title: ").append(def.getTitle()).append("\n");
+        sb.append("  on_open actions:  ").append(def.getOnOpen().size()).append("\n");
+        sb.append("  on_close actions: ").append(def.getOnClose().size()).append("\n");
+        def.getFiller().ifPresent(f ->
+            sb.append("  filler: ").append(f.item()).append("\n"));
+
+        for (int p = 0; p < def.getPageCount(); p++) {
+            java.util.List<GuiDefinition.Button> pageBtns = def.getButtonsForPage(p);
+            sb.append("  [page ").append(p).append("] ").append(pageBtns.size()).append(" button(s)");
+            for (GuiDefinition.Button b : pageBtns) {
+                sb.append("\n    slot=").append(b.slot());
+                if (b.toggle().isPresent()) {
+                    sb.append("  [toggle tag=").append(b.toggle().get().tag()).append("]");
+                } else {
+                    sb.append("  item=").append(b.item());
+                    if (!b.actions().isEmpty()) {
+                        sb.append("  actions=[");
+                        b.actions().forEach(a -> sb.append(a.type().name().toLowerCase()).append(","));
+                        sb.deleteCharAt(sb.length() - 1);
+                        sb.append("]");
+                    }
+                }
+                b.condition().ifPresent(c ->
+                    sb.append("  cond=").append(c.type().name().toLowerCase()).append(":").append(c.value()));
+            }
+            sb.append("\n");
+        }
+
+        String out = sb.toString().trim();
+        ctx.getSource().sendFeedback(() -> Text.literal(out), false);
+        return 1;
+    }
+
     private static int showHelp(CommandContext<ServerCommandSource> ctx) {
         String help =
                 "[GuiAPI] Commands (permission level 2):\n" +
                 "  /guiapi open <id> [targets] - Open a GUI for yourself or target players\n" +
+                "  /guiapi info <id>           - Show detailed info about a loaded GUI\n" +
                 "  /guiapi list               - List all loaded GUI definitions\n" +
                 "  /guiapi reload             - Reload all datapack resources (including GUIs)\n" +
                 "  /guiapi var get <player> <key>        - Get a runtime variable\n" +
@@ -197,7 +261,13 @@ public class GuiCommand {
                 "              var_eq | var_gt | var_lt | var_set\n" +
                 "  actions:    run_command | close | open_gui | message | sound\n" +
                 "              next_page | prev_page | goto_page\n" +
-                "              set_var | add_var | sub_var | reset_var | clear_vars";
+                "              set_var | add_var | sub_var | reset_var | clear_vars\n" +
+                "              give_item | broadcast\n" +
+                "\n" +
+                "give_item  value: <item_id>[:<amount>]  e.g. minecraft:diamond:3\n" +
+                "broadcast  value: <message>  or  actionbar:<message>\n" +
+                "\n" +
+                "Extra placeholders: {health} {max_health} {food} {level} {xp}";
         ctx.getSource().sendFeedback(() -> Text.literal(help), false);
         return 1;
     }
