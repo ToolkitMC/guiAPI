@@ -31,7 +31,7 @@ public final class GuiApiConfig {
     private boolean debugMode           = false;
     private boolean allowCloseOnMove    = true;
     private boolean allowDelayedActions = true;
-    private boolean allowStatusEffects  = true; // 1. New Config
+    private boolean allowStatusEffects  = true;  // 1. New Config
     private boolean logCommands         = false; // 2. New Config
     private int     defaultTickRate     = 20;    // 3. New Config
 
@@ -41,11 +41,10 @@ public final class GuiApiConfig {
     private boolean enableCloseSound     = true;  // 7. New Config
 
     private String  chatPrefix           = "§8[§6GuiAPI§8] §f"; // 8. New Config
-    private int     soundVolume          = 100;                 // 9. New Config
-    private String  commandExecuteMode   = "CHAT";              // 10. New Config
+    private int     soundVolume          = 100;                  // 9. New Config
+    private String  commandExecuteMode   = "CHAT";               // 10. New Config
 
-    private boolean allowGiveItem  = true;  // 11. give_item action guard
-    private boolean allowBroadcast = true;  // 12. broadcast action guard
+    private boolean enableNoneAction     = false; // 11. Experimental
 
     private GuiApiConfig() {}
 
@@ -95,10 +94,8 @@ public final class GuiApiConfig {
                 soundVolume = Math.clamp(obj.get("sound_volume").getAsInt(), 0, 100);
             if (obj.has("command_execute_mode"))
                 commandExecuteMode = obj.get("command_execute_mode").getAsString();
-            if (obj.has("allow_give_item"))
-                allowGiveItem = obj.get("allow_give_item").getAsBoolean();
-            if (obj.has("allow_broadcast"))
-                allowBroadcast = obj.get("allow_broadcast").getAsBoolean();
+            if (obj.has("enable_none_action"))
+                enableNoneAction = obj.get("enable_none_action").getAsBoolean();
 
         } catch (IOException e) {
             GuiApiMod.LOGGER.error("[GuiAPI] Failed to load config: {}", e.getMessage());
@@ -119,13 +116,12 @@ public final class GuiApiConfig {
         obj.addProperty("default_tick_rate",       defaultTickRate);
         obj.addProperty("enable_button_glint",     enableButtonGlint);
         obj.addProperty("show_item_ids_developer", showItemIdsDeveloper);
-        obj.addProperty("mute_click_errors",      muteClickErrors);
-        obj.addProperty("enable_close_sound",     enableCloseSound);
+        obj.addProperty("mute_click_errors",       muteClickErrors);
+        obj.addProperty("enable_close_sound",      enableCloseSound);
         obj.addProperty("chat_prefix",             chatPrefix);
         obj.addProperty("sound_volume",            soundVolume);
         obj.addProperty("command_execute_mode",    commandExecuteMode);
-        obj.addProperty("allow_give_item",         allowGiveItem);
-        obj.addProperty("allow_broadcast",         allowBroadcast);
+        obj.addProperty("enable_none_action",      enableNoneAction);
         try {
             Files.writeString(CONFIG_PATH, GSON.toJson(obj));
         } catch (IOException e) {
@@ -135,14 +131,16 @@ public final class GuiApiConfig {
 
     // ── Getters / Setters ────────────────────────────────────────────────────
 
-    public boolean isAllowConsoleRunWith() { return allowConsoleRunWith; }
-    public boolean isLogUnknownItems()     { return logUnknownItems; }
-    public boolean isLogUnknownSounds()    { return logUnknownSounds; }
-    public int     getPermissionLevel()    { return permissionLevel; }
-
+    public boolean isAllowConsoleRunWith()        { return allowConsoleRunWith; }
     public void setAllowConsoleRunWith(boolean v) { allowConsoleRunWith = v; }
+
+    public boolean isLogUnknownItems()            { return logUnknownItems; }
     public void setLogUnknownItems(boolean v)     { logUnknownItems = v; }
+
+    public boolean isLogUnknownSounds()           { return logUnknownSounds; }
     public void setLogUnknownSounds(boolean v)    { logUnknownSounds = v; }
+
+    public int  getPermissionLevel()              { return permissionLevel; }
     public void setPermissionLevel(int v)         { permissionLevel = Math.clamp(v, 0, 4); }
 
     public boolean isDebugMode()                  { return debugMode; }
@@ -151,8 +149,8 @@ public final class GuiApiConfig {
     public boolean isAllowCloseOnMove()           { return allowCloseOnMove; }
     public void setAllowCloseOnMove(boolean v)    { allowCloseOnMove = v; }
 
-    public boolean isAllowDelayedActions()         { return allowDelayedActions; }
-    public void setAllowDelayedActions(boolean v)  { allowDelayedActions = v; }
+    public boolean isAllowDelayedActions()        { return allowDelayedActions; }
+    public void setAllowDelayedActions(boolean v) { allowDelayedActions = v; }
 
     public boolean isAllowStatusEffects()         { return allowStatusEffects; }
     public void setAllowStatusEffects(boolean v)  { allowStatusEffects = v; }
@@ -160,33 +158,30 @@ public final class GuiApiConfig {
     public boolean isLogCommands()                { return logCommands; }
     public void setLogCommands(boolean v)         { logCommands = v; }
 
-    public int getDefaultTickRate()               { return defaultTickRate; }
+    public int  getDefaultTickRate()              { return defaultTickRate; }
     public void setDefaultTickRate(int v)         { defaultTickRate = v; }
 
-    public boolean isEnableButtonGlint() { return enableButtonGlint; }
-    public void setEnableButtonGlint(boolean v) { enableButtonGlint = v; }
+    public boolean isEnableButtonGlint()          { return enableButtonGlint; }
+    public void setEnableButtonGlint(boolean v)   { enableButtonGlint = v; }
 
-    public boolean isShowItemIdsDeveloper() { return showItemIdsDeveloper; }
-    public void setShowItemIdsDeveloper(boolean v) { showItemIdsDeveloper = v; }
+    public boolean isShowItemIdsDeveloper()           { return showItemIdsDeveloper; }
+    public void setShowItemIdsDeveloper(boolean v)    { showItemIdsDeveloper = v; }
 
-    public boolean isMuteClickErrors() { return muteClickErrors; }
-    public void setMuteClickErrors(boolean v) { muteClickErrors = v; }
+    public boolean isMuteClickErrors()            { return muteClickErrors; }
+    public void setMuteClickErrors(boolean v)     { muteClickErrors = v; }
 
-    public boolean isEnableCloseSound() { return enableCloseSound; }
-    public void setEnableCloseSound(boolean v) { enableCloseSound = v; }
+    public boolean isEnableCloseSound()           { return enableCloseSound; }
+    public void setEnableCloseSound(boolean v)    { enableCloseSound = v; }
 
-    public String getChatPrefix() { return chatPrefix; }
-    public void setChatPrefix(String v) { chatPrefix = v; }
+    public String getChatPrefix()                 { return chatPrefix; }
+    public void setChatPrefix(String v)           { chatPrefix = v; }
 
-    public int getSoundVolume() { return soundVolume; }
-    public void setSoundVolume(int v) { soundVolume = Math.clamp(v, 0, 100); }
+    public int  getSoundVolume()                  { return soundVolume; }
+    public void setSoundVolume(int v)             { soundVolume = Math.clamp(v, 0, 100); }
 
-    public String getCommandExecuteMode() { return commandExecuteMode; }
-    public void setCommandExecuteMode(String v) { commandExecuteMode = v; }
+    public String getCommandExecuteMode()         { return commandExecuteMode; }
+    public void setCommandExecuteMode(String v)   { commandExecuteMode = v; }
 
-    public boolean isAllowGiveItem()          { return allowGiveItem; }
-    public void setAllowGiveItem(boolean v)   { allowGiveItem = v; }
-
-    public boolean isAllowBroadcast()         { return allowBroadcast; }
-    public void setAllowBroadcast(boolean v)  { allowBroadcast = v; }
+    public boolean isEnableNoneAction()           { return enableNoneAction; }
+    public void setEnableNoneAction(boolean v)    { enableNoneAction = v; }
 }
