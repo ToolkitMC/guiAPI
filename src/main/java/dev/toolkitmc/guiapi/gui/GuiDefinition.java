@@ -52,7 +52,8 @@ public class GuiDefinition {
         RUN_COMMAND, CLOSE, OPEN_GUI, MESSAGE, NEXT_PAGE, PREV_PAGE, GOTO_PAGE, SOUND,
         SET_VAR, ADD_VAR, SUB_VAR, RESET_VAR, CLEAR_VARS, REFRESH, TAKE_ITEM,
         SET_SCORE, ADD_SCORE, SUB_SCORE, ACTION_BAR,
-        ADD_EFFECT, REMOVE_EFFECT, CLEAR_EFFECTS, NONE, ANVIL_INPUT;
+        ADD_EFFECT, REMOVE_EFFECT, CLEAR_EFFECTS, NONE, ANVIL_INPUT,
+        GIVE_ITEM, BROADCAST;
 
         public static ActionType fromString(String s) {
             return switch (s.toLowerCase()) {
@@ -80,6 +81,8 @@ public class GuiDefinition {
                 case "clear_effects"  -> CLEAR_EFFECTS;
                 case "none"           -> NONE;
                 case "anvil_input"    -> ANVIL_INPUT;
+                case "give_item"   -> GIVE_ITEM;
+                case "broadcast"   -> BROADCAST;
                 default            -> NONE;
             };
         }

@@ -517,6 +517,11 @@ public class BarrelGuiHandler {
         text = text.replace("{page}",   String.valueOf(page));
         text = text.replace("{page1}",  String.valueOf(page + 1));
         text = text.replace("{pages}",  String.valueOf(def.getPageCount()));
+        text = text.replace("{health}", String.valueOf((int) player.getHealth()));
+        text = text.replace("{max_health}", String.valueOf((int) player.getMaxHealth()));
+        text = text.replace("{food}",   String.valueOf(player.getHungerManager().getFoodLevel()));
+        text = text.replace("{level}",  String.valueOf(player.experienceLevel));
+        text = text.replace("{xp}",     String.valueOf(player.totalExperience));
 
         // {score:objective}
         int idx;
@@ -930,8 +935,82 @@ public class BarrelGuiHandler {
                 }
                 player.clearStatusEffects();
             }
+            case GIVE_ITEM -> {
+                // Syntax: <item_id>[:<amount>]
+                // Example: "minecraft:diamond:3"  or  "minecraft:diamond"
+                if (!dev.toolkitmc.guiapi.config.GuiApiConfig.INSTANCE.isAllowGiveItem()) {
+                    if (!dev.toolkitmc.guiapi.config.GuiApiConfig.INSTANCE.isMuteClickErrors())
+                        GuiApiMod.LOGGER.warn("[GuiAPI] give_item action is disabled in config.");
+                    break;
+                }
+                String resolved = resolve(action.value(), player, def, currentPage);
+                giveItemToPlayer(player, resolved);
+            }
+            case BROADCAST -> {
+                // Syntax: [actionbar:]<message>
+                // Prefix "actionbar:" → send to every player's action bar
+                // No prefix → send to every player's chat
+                if (!dev.toolkitmc.guiapi.config.GuiApiConfig.INSTANCE.isAllowBroadcast()) {
+                    if (!dev.toolkitmc.guiapi.config.GuiApiConfig.INSTANCE.isMuteClickErrors())
+                        GuiApiMod.LOGGER.warn("[GuiAPI] broadcast action is disabled in config.");
+                    break;
+                }
+                String resolved = resolve(action.value(), player, def, currentPage);
+                boolean toActionBar = resolved.startsWith("actionbar:");
+                String msg = toActionBar ? resolved.substring("actionbar:".length()) : resolved;
+                Text broadcastText = Text.literal(msg);
+                for (ServerPlayerEntity online : server.getPlayerManager().getPlayerList()) {
+                    online.sendMessage(broadcastText, toActionBar);
+                }
+            }
         }
         return false;
+    }
+
+    // ── Give item helper ──────────────────────────────────────────────────────
+
+    /**
+     * Parses "{item_id}" or "{item_id}:{amount}" and gives the item to the player.
+     * Falls back to /give command for complex item strings containing NBT/components.
+     * Uses the Minecraft item registry for simple items.
+     */
+    private static void giveItemToPlayer(ServerPlayerEntity player, String value) {
+        // Split off trailing amount if the last colon segment is a pure integer
+        // e.g. "minecraft:diamond:3" → item="minecraft:diamond", amount=3
+        //      "minecraft:stone"      → item="minecraft:stone",   amount=1
+        String itemId = value;
+        int amount = 1;
+        int lastColon = value.lastIndexOf(':');
+        if (lastColon > 0) {
+            String possibleAmount = value.substring(lastColon + 1);
+            // Make sure the segment before it still looks like a namespace:path
+            // (i.e., there is at least one earlier colon for the namespace)
+            int firstColon = value.indexOf(':');
+            if (firstColon != lastColon) {
+                try {
+                    amount = Math.clamp(Integer.parseInt(possibleAmount), 1, 64);
+                    itemId = value.substring(0, lastColon);
+                } catch (NumberFormatException ignored) {
+                    // The last segment is not a number — treat the whole string as item id
+                }
+            }
+        }
+
+        Identifier id = Identifier.tryParse(itemId);
+        if (id != null && Registries.ITEM.containsId(id)) {
+            ItemStack stack = new ItemStack(Registries.ITEM.get(id), amount);
+            boolean inserted = player.getInventory().insertStack(stack);
+            if (!inserted) {
+                // Inventory full — drop at player's feet
+                player.dropItem(stack, false);
+            }
+            player.currentScreenHandler.sendContentUpdates();
+            debug("give_item: player={} item={} x{}", player.getNameForScoreboard(), itemId, amount);
+        } else {
+            if (!dev.toolkitmc.guiapi.config.GuiApiConfig.INSTANCE.isMuteClickErrors()) {
+                GuiApiMod.LOGGER.warn("[GuiAPI] give_item: unknown item '{}', skipping.", itemId);
+            }
+        }
     }
 
     // ── Score helpers ─────────────────────────────────────────────────────────

@@ -1,215 +1,210 @@
 {
-  "title": "§dMaster GUI Demo §8— {player}",
+  "title": "§6New Features §8— {player} §7[{page1}/{pages}]",
   "rows": 4,
   "tick_rate": 20,
-  "close_on_move": true,
   "filler": {
-    "item": "minecraft:gray_stained_glass_pane",
+    "item": "minecraft:black_stained_glass_pane",
     "name": " ",
     "glint": false,
     "hide_tooltip": true
   },
   "on_open": [
-    { "type": "set_var", "var": "counter", "value": "1" }
+    { "type": "sound", "value": "minecraft:block.note_block.pling:1.0:1.2" }
   ],
   "buttons": [
     {
-      "slot": 4,
-      "item": "minecraft:player_head",
-      "name": "§d★ Master GUI API Demo ★",
+      "slot": 4, "page": 0,
+      "item": "minecraft:nether_star",
+      "name": "§6New Features Demo",
+      "glint": true,
       "lore": [
-        "§7Current value: §f{var:counter}",
-        "§7Current Score (Coins): §e{score:coins}",
-        "§7XP Level: §a{player}'s level",
-        "§7Auto-refreshing every 1 second (tick_rate: 20)",
-        "§7Closes automatically if you walk away (close_on_move: true)",
-        "§7Empty slots are automatically filled (filler object)"
+        "§7This GUI demonstrates the 3 new features:",
+        "§a► give_item  §8— item ver",
+        "§b► broadcast  §8— tüm sunucuya mesaj",
+        "§e► Yeni placeholder'lar",
+        " ",
+        "§8{gui}  §7Page {page1}/{pages}"
+      ],
+      "actions": [{ "type": "sound", "value": "minecraft:entity.experience_orb.pickup" }]
+    },
+
+    {
+      "slot": 10, "page": 0,
+      "item": "minecraft:diamond",
+      "name": "§b► give_item §7— Tek Item",
+      "lore": [
+        "§7Envantere 1 diamond ver.",
+        "§8Syntax: give_item:<item_id>",
+        " ",
+        "§aKliğa bas!"
+      ],
+      "actions": [
+        { "type": "give_item", "value": "minecraft:diamond" },
+        { "type": "sound", "value": "minecraft:entity.item.pickup" },
+        { "type": "action_bar", "value": "§b+1 Diamond alındı!" }
       ]
     },
+
     {
-      "slot": 10,
-      "item": "minecraft:lime_concrete",
-      "name": "§a1. Dynamic Stack Size & Action Delays",
-      "amount": "{var:counter}",
+      "slot": 12, "page": 0,
+      "item": "minecraft:emerald",
+      "name": "§a► give_item §7— Miktar ile",
       "lore": [
-        "§7Updates slot item count based on a variable,",
-        "§7completely flicker-free!",
-        "§7Next count: §f{var:counter}",
-        "§7Increments by 1, waits 20 ticks (1s), then plays sound!"
+        "§7Envantere 8 emerald ver.",
+        "§8Syntax: give_item:<item_id>:<amount>",
+        " ",
+        "§aKliğa bas!"
       ],
       "actions": [
-        { "type": "add_var", "var": "counter", "value": "1" },
-        { "type": "action_bar", "value": "§aCounter updated to {var:counter}! Sound playing in 1s..." },
-        { "type": "refresh" },
-        { "type": "sound", "value": "minecraft:entity.experience_orb.pickup:0.5:1.2", "delay": 20 }
+        { "type": "give_item", "value": "minecraft:emerald:8" },
+        { "type": "sound", "value": "minecraft:entity.item.pickup" },
+        { "type": "action_bar", "value": "§a+8 Emerald alındı!" }
       ]
     },
+
     {
-      "slot": 12,
-      "item": "minecraft:diamond_sword",
-      "name": "§b2. Item Shop §a(Buy Iron)",
+      "slot": 14, "page": 0,
+      "item": "minecraft:beacon",
+      "name": "§e► broadcast §7— Chat",
       "lore": [
-        "§7Cost: §e5 Gold Nuggets",
-        "§7Requires gold in inventory.",
-        "§aClick to purchase!"
+        "§7Tüm oyunculara chat mesajı gönder.",
+        "§8Syntax: broadcast:<mesaj>",
+        " ",
+        "§eKliğa bas!"
       ],
-      "condition": { "type": "has_item", "value": "minecraft:gold_nugget:5" },
       "actions": [
-        { "type": "take_item", "value": "minecraft:gold_nugget:5" },
-        { "type": "run_command", "value": "give @s minecraft:iron_ingot", "run_with": "console" },
-        { "type": "sound", "value": "minecraft:entity.villager.yes" },
-        { "type": "action_bar", "value": "§aPurchase successful!" },
-        { "type": "refresh" }
+        { "type": "broadcast", "value": "§6[Duyuru] §f{player} §7bir GUI'den mesaj gönderdi!" },
+        { "type": "sound", "value": "minecraft:block.note_block.bell:1.0:1.0" },
+        { "type": "action_bar", "value": "§eMesaj tüm oyunculara gönderildi." }
       ]
     },
+
     {
-      "slot": 12,
-      "item": "minecraft:barrier",
-      "name": "§c2. Item Shop §7(Locked)",
+      "slot": 16, "page": 0,
+      "item": "minecraft:end_crystal",
+      "name": "§d► broadcast §7— Action Bar",
+      "glint": true,
       "lore": [
-        "§7Cost: §e5 Gold Nuggets",
-        "§cYou do not have enough Gold Nuggets!"
+        "§7Tüm oyuncuların action bar'ına mesaj.",
+        "§8Syntax: broadcast:actionbar:<mesaj>",
+        " ",
+        "§dKliğa bas!"
       ],
-      "condition": { "type": "not_item", "value": "minecraft:gold_nugget:5" },
       "actions": [
-        { "type": "sound", "value": "minecraft:entity.villager.no" },
-        { "type": "action_bar", "value": "§cInsufficient funds!" }
+        { "type": "broadcast", "value": "actionbar:§d✦ §f{player} §7bir şey yaptı! §d✦" },
+        { "type": "sound", "value": "minecraft:entity.ender_dragon.growl:0.3:1.8" },
+        { "type": "action_bar", "value": "§dAction bar mesajı gönderildi." }
       ]
     },
+
     {
-      "slot": 14,
-      "item": "minecraft:gold_block",
-      "name": "§e5. Scoreboard & ActionBar Support",
-      "lore": [
-        "§7Directly modifies your scoreboard!",
-        "§7Left-Click: §a+10 Coins",
-        "§7Right-Click: §c-10 Coins",
-        "§7Current Coins: §e{score:coins}"
-      ],
+      "slot": 31, "page": 0,
+      "item": "minecraft:arrow",
+      "name": "§7Sonraki Sayfa →",
+      "lore": ["§8Page {page1}/{pages}"],
       "actions": [
-        { "type": "add_score", "value": "coins:10" },
-        { "type": "sound", "value": "minecraft:entity.experience_orb.pickup" },
-        { "type": "action_bar", "value": "§a+10 Coins added!" },
-        { "type": "refresh" }
-      ],
-      "click_type": "left"
+        { "type": "sound", "value": "minecraft:item.book.page_turn" },
+        { "type": "next_page" }
+      ]
     },
+
     {
-      "slot": 14,
-      "item": "minecraft:gold_block",
-      "name": "§e5. Scoreboard & ActionBar Support",
-      "lore": [
-        "§7Directly modifies your scoreboard!",
-        "§7Left-Click: §a+10 Coins",
-        "§7Right-Click: §c-10 Coins",
-        "§7Current Coins: §e{score:coins}"
-      ],
-      "actions": [
-        { "type": "sub_score", "value": "coins:10" },
-        { "type": "sound", "value": "minecraft:block.anvil.land:0.2:1.5" },
-        { "type": "action_bar", "value": "§c-10 Coins removed!" },
-        { "type": "refresh" }
-      ],
-      "click_type": "right"
-    },
-    {
-      "slot": 16,
-      "item": "minecraft:netherite_sword",
-      "name": "§c6. Hiding Additional Tooltips",
-      "lore": [
-        "§7Cleans up sword damage modifiers",
-        "§7using hide_additional_tooltip: true!"
-      ],
-      "hide_additional_tooltip": true
-    },
-    {
-      "slot": 20,
-      "item": "minecraft:brewing_stand",
-      "name": "§d8. Status Effect Controller",
-      "lore": [
-        "§7Left-Click: §bReceive Speed II (15s)",
-        "§7Right-Click: §cCure Effects (Drink Milk)"
-      ],
-      "actions": [
-        { "type": "add_effect", "value": "minecraft:speed:15:1:false" },
-        { "type": "sound", "value": "minecraft:entity.generic.drink" },
-        { "type": "action_bar", "value": "§bSpeed II Effect granted!" }
-      ],
-      "click_type": "left"
-    },
-    {
-      "slot": 20,
-      "item": "minecraft:brewing_stand",
-      "name": "§d8. Status Effect Controller",
-      "lore": [
-        "§7Left-Click: §bReceive Speed II (15s)",
-        "§7Right-Click: §cCure Effects (Drink Milk)"
-      ],
-      "actions": [
-        { "type": "clear_effects" },
-        { "type": "sound", "value": "minecraft:entity.cow.milk" },
-        { "type": "action_bar", "value": "§cAll effects cleared!" }
-      ],
-      "click_type": "right"
-    },
-    {
-      "slot": 22,
+      "slot": 4, "page": 1,
       "item": "minecraft:experience_bottle",
-      "name": "§a7. Experience Check §7(Level >= 30)",
+      "name": "§eYeni Placeholder'lar",
       "lore": [
-        "§7Only players with XP Level >= 30",
-        "§7can click this button!"
+        "§7Bu sayfa yeni {health}/{food}/{level}/{xp}",
+        "§7placeholder'larını gösterir.",
+        " ",
+        "§c❤ Can: §f{health} / {max_health}",
+        "§6🍗 Açlık: §f{food} / 20",
+        "§a✦ Level: §f{level}",
+        "§b★ XP: §f{xp}",
+        " ",
+        "§8tick_rate:20 — değerler otomatik güncellenir."
       ],
-      "condition": { "type": "level_gt", "value": "29" },
+      "actions": [{ "type": "sound", "value": "minecraft:entity.experience_orb.pickup:0.5:1.5" }]
+    },
+
+    {
+      "slot": 10, "page": 1,
+      "item": "minecraft:red_dye",
+      "name": "§c❤ Can: §f{health} / {max_health}",
+      "lore": [
+        "§7Anlık HP durumu.",
+        "§8Placeholder: §c{health} §8ve §c{max_health}"
+      ],
+      "actions": [{ "type": "action_bar", "value": "§c❤ Can: {health}/{max_health}" }]
+    },
+
+    {
+      "slot": 12, "page": 1,
+      "item": "minecraft:cooked_beef",
+      "name": "§6🍗 Açlık: §f{food} / 20",
+      "lore": [
+        "§7Anlık açlık seviyesi.",
+        "§8Placeholder: §6{food}"
+      ],
+      "actions": [{ "type": "action_bar", "value": "§6🍗 Açlık: {food}/20" }]
+    },
+
+    {
+      "slot": 14, "page": 1,
+      "item": "minecraft:experience_bottle",
+      "name": "§a✦ Level: §f{level}",
+      "lore": [
+        "§7Anlık XP level.",
+        "§8Placeholder: §a{level}"
+      ],
+      "actions": [{ "type": "action_bar", "value": "§a✦ Level: {level}" }]
+    },
+
+    {
+      "slot": 16, "page": 1,
+      "item": "minecraft:green_dye",
+      "name": "§b★ XP: §f{xp}",
+      "lore": [
+        "§7Toplam XP puanı.",
+        "§8Placeholder: §b{xp}"
+      ],
+      "actions": [{ "type": "action_bar", "value": "§b★ Total XP: {xp}" }]
+    },
+
+    {
+      "slot": 22, "page": 1,
+      "item": "minecraft:golden_apple",
+      "name": "§c► give_item §8+ Placeholder Combo",
+      "lore": [
+        "§7Give item ve placeholder birlikte:",
+        "§7Can durumuna göre mesaj + apple ver.",
+        " ",
+        "§c❤ Şu anki can: {health}/{max_health}",
+        "§aKliğa bas — apple al!"
+      ],
       "actions": [
-        { "type": "sound", "value": "minecraft:entity.player.levelup" },
-        { "type": "action_bar", "value": "§aCongratulations! Level check passed." }
+        { "type": "give_item", "value": "minecraft:golden_apple" },
+        { "type": "sound", "value": "minecraft:entity.item.pickup" },
+        { "type": "action_bar", "value": "§c❤ {health}/{max_health} §7can ile golden apple aldın!" }
       ]
     },
+
     {
-      "slot": 22,
-      "item": "minecraft:glass_bottle",
-      "name": "§c7. Experience Check §7(Locked)",
-      "lore": [
-        "§cYour level is below 30!",
-        "§7This feature is locked."
-      ],
-      "condition": { "type": "level_lt", "value": "30" },
+      "slot": 27, "page": 1,
+      "item": "minecraft:arrow",
+      "name": "§7← Önceki Sayfa",
+      "lore": ["§8Page {page1}/{pages}"],
       "actions": [
-        { "type": "sound", "value": "minecraft:entity.enderman.teleport:0.5:0.5" },
-        { "type": "action_bar", "value": "§cYou must be at least level 30!" }
+        { "type": "sound", "value": "minecraft:item.book.page_turn" },
+        { "type": "prev_page" }
       ]
     },
+
     {
-      "slot": 24,
-      "item": "minecraft:book",
-      "name": "§b3. Multi-Value Custom Model Data",
-      "lore": [
-        "§7Advanced 1.21.4+ floats/flags/strings/colors"
-      ],
-      "custom_model_data": {
-        "floats": [42.5],
-        "flags": [true, false],
-        "strings": ["demo_tag"],
-        "colors": [16711680]
-      }
-    },
-    {
-      "slot": 26,
-      "item": "minecraft:stick",
-      "name": "§b3. Custom Item Model",
-      "lore": [
-        "§7Applies custom item_model ID",
-        "§7directly to the stick item."
-      ],
-      "item_model": "my_pack:item/custom_sword"
-    },
-    {
-      "slot": 31,
+      "slot": 35, "page": 1,
       "item": "minecraft:barrier",
-      "name": "§cClose",
+      "name": "§cKapat",
       "actions": [
-        { "type": "sound", "value": "minecraft:ui.button.click" },
+        { "type": "sound", "value": "minecraft:block.wooden_button.click_off" },
         { "type": "close" }
       ]
     }
