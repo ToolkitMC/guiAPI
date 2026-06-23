@@ -1,0 +1,70 @@
+{
+  "title": "§bMacro & Input Demo",
+  "rows": 3,
+  "macros": {
+    "give_reward": [
+      { "type": "run_command", "value": "give @s minecraft:diamond 1", "run_with": "console" },
+      { "type": "sound", "value": "minecraft:entity.player.levelup" },
+      { "type": "action_bar", "value": "§aReward claimed!" }
+    ],
+    "show_info": [
+      { "type": "message", "value": "§7XP: §a{xp} §7| Input: §f{input} §7| Var: §e{var:myVar}" }
+    ]
+  },
+  "buttons": [
+    {
+      "slot": 10,
+      "item": "minecraft:writable_book",
+      "name": "§eEnter Your Name",
+      "lore": [
+        "§7Click to open anvil input",
+        "§7Saves to {input} and {var:myVar}"
+      ],
+      "actions": [
+        { "type": "anvil_input", "var": "myVar", "value": "Enter Name|{var:myVar}" }
+      ]
+    },
+    {
+      "slot": 12,
+      "item": "minecraft:diamond",
+      "name": "§bRun Macro: give_reward",
+      "lore": [
+        "§7Executes the 'give_reward' macro",
+        "§7defined in this JSON's macros block."
+      ],
+      "actions": [
+        { "type": "run_function", "value": "give_reward" }
+      ]
+    },
+    {
+      "slot": 14,
+      "item": "minecraft:book",
+      "name": "§dShow Info Macro",
+      "lore": [
+        "§7Displays {xp}, {input} and {var:myVar}"
+      ],
+      "actions": [
+        { "type": "run_function", "value": "show_info" }
+      ]
+    },
+    {
+      "slot": 16,
+      "item": "minecraft:experience_bottle",
+      "name": "§aShow XP Level",
+      "lore": [
+        "§7Your current XP level: §f{xp}"
+      ],
+      "actions": [
+        { "type": "message", "value": "§7Your XP level is §a{xp}§7!" }
+      ]
+    },
+    {
+      "slot": 22,
+      "item": "minecraft:barrier",
+      "name": "§cClose",
+      "actions": [
+        { "type": "close" }
+      ]
+    }
+  ]
+}

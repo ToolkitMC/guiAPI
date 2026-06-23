@@ -52,7 +52,7 @@ public class GuiDefinition {
         RUN_COMMAND, CLOSE, OPEN_GUI, MESSAGE, NEXT_PAGE, PREV_PAGE, GOTO_PAGE, SOUND,
         SET_VAR, ADD_VAR, SUB_VAR, RESET_VAR, CLEAR_VARS, REFRESH, TAKE_ITEM,
         SET_SCORE, ADD_SCORE, SUB_SCORE, ACTION_BAR,
-        ADD_EFFECT, REMOVE_EFFECT, CLEAR_EFFECTS, NONE, ANVIL_INPUT;
+        ADD_EFFECT, REMOVE_EFFECT, CLEAR_EFFECTS, NONE, ANVIL_INPUT, RUN_FUNCTION;
 
         public static ActionType fromString(String s) {
             return switch (s.toLowerCase()) {
@@ -80,6 +80,7 @@ public class GuiDefinition {
                 case "clear_effects"  -> CLEAR_EFFECTS;
                 case "none"           -> NONE;
                 case "anvil_input"    -> ANVIL_INPUT;
+                case "run_function"   -> RUN_FUNCTION;
                 default            -> NONE;
             };
         }
@@ -220,6 +221,7 @@ public class GuiDefinition {
     private final int tickRate;
     private final boolean closeOnMove;
     private final ContainerType containerType;
+    private final java.util.Map<String, List<ButtonAction>> macros;
 
     // ── Constructor ──────────────────────────────────────────────────────────
 
@@ -230,7 +232,7 @@ public class GuiDefinition {
                           Optional<FillerConfig> filler,
                           int tickRate,
                           boolean closeOnMove) {
-        this(id, title, rows, buttons, onOpen, onClose, filler, tickRate, closeOnMove, ContainerType.BARREL);
+        this(id, title, rows, buttons, onOpen, onClose, filler, tickRate, closeOnMove, ContainerType.BARREL, java.util.Map.of());
     }
 
     public GuiDefinition(Identifier id, String title, int rows,
@@ -241,6 +243,18 @@ public class GuiDefinition {
                           int tickRate,
                           boolean closeOnMove,
                           ContainerType containerType) {
+        this(id, title, rows, buttons, onOpen, onClose, filler, tickRate, closeOnMove, containerType, java.util.Map.of());
+    }
+
+    public GuiDefinition(Identifier id, String title, int rows,
+                          List<Button> buttons,
+                          List<ButtonAction> onOpen,
+                          List<ButtonAction> onClose,
+                          Optional<FillerConfig> filler,
+                          int tickRate,
+                          boolean closeOnMove,
+                          ContainerType containerType,
+                          java.util.Map<String, List<ButtonAction>> macros) {
         this.id        = id;
         this.title     = title;
         this.rows      = rows;
@@ -252,6 +266,7 @@ public class GuiDefinition {
         this.tickRate  = tickRate;
         this.closeOnMove = closeOnMove;
         this.containerType = containerType;
+        this.macros    = macros;
     }
 
     public static GuiDefinition create(Identifier id, String title, int rows,
@@ -261,7 +276,7 @@ public class GuiDefinition {
                                        Optional<FillerConfig> filler,
                                        int tickRate,
                                        boolean closeOnMove) {
-        return new GuiDefinition(id, title, rows, buttons, onOpen, onClose, filler, tickRate, closeOnMove, ContainerType.BARREL);
+        return new GuiDefinition(id, title, rows, buttons, onOpen, onClose, filler, tickRate, closeOnMove, ContainerType.BARREL, java.util.Map.of());
     }
 
     public static GuiDefinition create(Identifier id, String title, int rows,
@@ -272,7 +287,19 @@ public class GuiDefinition {
                                        int tickRate,
                                        boolean closeOnMove,
                                        ContainerType containerType) {
-        return new GuiDefinition(id, title, rows, buttons, onOpen, onClose, filler, tickRate, closeOnMove, containerType);
+        return new GuiDefinition(id, title, rows, buttons, onOpen, onClose, filler, tickRate, closeOnMove, containerType, java.util.Map.of());
+    }
+
+    public static GuiDefinition create(Identifier id, String title, int rows,
+                                       List<Button> buttons,
+                                       List<ButtonAction> onOpen,
+                                       List<ButtonAction> onClose,
+                                       Optional<FillerConfig> filler,
+                                       int tickRate,
+                                       boolean closeOnMove,
+                                       ContainerType containerType,
+                                       java.util.Map<String, List<ButtonAction>> macros) {
+        return new GuiDefinition(id, title, rows, buttons, onOpen, onClose, filler, tickRate, closeOnMove, containerType, macros);
     }
 
     // ── Parser ───────────────────────────────────────────────────────────────
@@ -308,7 +335,21 @@ public class GuiDefinition {
         int tickRate = obj.has("tick_rate") ? obj.get("tick_rate").getAsInt() : dev.toolkitmc.guiapi.config.GuiApiConfig.INSTANCE.getDefaultTickRate();
         boolean closeOnMove = obj.has("close_on_move") && obj.get("close_on_move").getAsBoolean();
 
-        return new GuiDefinition(id, title, rows, buttons, onOpen, onClose, filler, tickRate, closeOnMove, containerType);
+        java.util.Map<String, List<ButtonAction>> macros = new java.util.HashMap<>();
+        if (obj.has("macros") && obj.get("macros").isJsonObject()) {
+            JsonObject macrosObj = obj.getAsJsonObject("macros");
+            for (java.util.Map.Entry<String, JsonElement> entry : macrosObj.entrySet()) {
+                List<ButtonAction> macroActions = new ArrayList<>();
+                if (entry.getValue().isJsonArray()) {
+                    for (JsonElement el : entry.getValue().getAsJsonArray()) {
+                        macroActions.add(parseAction(el.getAsJsonObject()));
+                    }
+                }
+                macros.put(entry.getKey(), macroActions);
+            }
+        }
+
+        return new GuiDefinition(id, title, rows, buttons, onOpen, onClose, filler, tickRate, closeOnMove, containerType, macros);
     }
 
     private static List<ButtonAction> parseActionList(JsonObject obj, String key) {
@@ -503,6 +544,7 @@ public class GuiDefinition {
     public int getTickRate()               { return tickRate; }
     public boolean isCloseOnMove()         { return closeOnMove; }
     public ContainerType getContainerType() { return containerType; }
+    public java.util.Map<String, List<ButtonAction>> getMacros() { return macros; }
 
     /** Returns only buttons belonging to the given page. */
     public List<Button> getButtonsForPage(int page) {

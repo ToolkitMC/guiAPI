@@ -24,3 +24,4 @@ TestResults.xml
 
 # Gradle
 .gradle/
+build/
