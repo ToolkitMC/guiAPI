@@ -189,6 +189,14 @@ public class GuiCommand {
                 "Variable actions:  set_var | add_var | sub_var | reset_var | clear_vars\n" +
                 "Variable conditions: var_eq | var_gt | var_lt | var_set\n" +
                 "Variable placeholder: {var:key}\n" +
+                "Input placeholder: {input}   (last anvil input)\n" +
+                "XP placeholder:    {xp}      (player experience level)\n" +
+                "\n" +
+                "Macro functions: define reusable action blocks in JSON with \"macros\": {}\n" +
+                "  actions: run_function:<macro_name>\n" +
+                "\n" +
+                "Anvil input: anvil_input action saves text to a variable and {input}\n" +
+                "  Example: {\"type\": \"anvil_input\", \"var\": \"myVar\", \"value\": \"Enter name|Default\"}\n" +
                 "\n" +
                 "Button JSON fields:\n" +
                 "  slot, page, item, name, lore, glint\n" +
@@ -196,8 +204,9 @@ public class GuiCommand {
                 "  condition:  has_tag | not_tag | score_gt | score_lt | score_eq\n" +
                 "              var_eq | var_gt | var_lt | var_set\n" +
                 "  actions:    run_command | close | open_gui | message | sound\n" +
-                "              next_page | prev_page | goto_page\n" +
-                "              set_var | add_var | sub_var | reset_var | clear_vars";
+                "              next_page | prev_page | goto_page | run_function\n" +
+                "              set_var | add_var | sub_var | reset_var | clear_vars\n" +
+                "              anvil_input" ;
         ctx.getSource().sendFeedback(() -> Text.literal(help), false);
         return 1;
     }

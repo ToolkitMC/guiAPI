@@ -304,6 +304,7 @@ public class BarrelGuiHandler {
     public static void onClose(UUID playerUuid) {
         if (OPEN_GUIS.remove(playerUuid) != null) {
             GuiVarStore.INSTANCE.clear(playerUuid);
+            GuiInputStore.INSTANCE.clear(playerUuid);
         }
     }
 
@@ -323,6 +324,7 @@ public class BarrelGuiHandler {
             executeAction(player, state.def, state.page, action);
         }
         GuiVarStore.INSTANCE.clear(player.getUuid());
+        GuiInputStore.INSTANCE.clear(player.getUuid());
     }
 
     /**
@@ -517,6 +519,8 @@ public class BarrelGuiHandler {
         text = text.replace("{page}",   String.valueOf(page));
         text = text.replace("{page1}",  String.valueOf(page + 1));
         text = text.replace("{pages}",  String.valueOf(def.getPageCount()));
+        text = text.replace("{xp}",     String.valueOf(player.experienceLevel));
+        text = text.replace("{input}",  GuiInputStore.INSTANCE.get(player.getUuid()));
 
         // {score:objective}
         int idx;
@@ -686,18 +690,32 @@ public class BarrelGuiHandler {
             }
             case ANVIL_INPUT -> {
                 String resolved = resolve(action.value(), player, def, currentPage);
-                String[] parts = resolved.split(":", 2);
-                if (parts.length == 2) {
-                    String varKey = parts[0];
-                    String anvilTitle = parts[1];
-                    final Identifier previousGuiId = def.getId();
-                    final int previousPage = currentPage;
+                String varKey = action.var().isEmpty() ? "input" : action.var();
+                String anvilTitle;
+                String defaultText;
+                if (resolved.contains("|")) {
+                    String[] p = resolved.split("\\|", 2);
+                    anvilTitle = p[0];
+                    defaultText = p[1];
+                } else {
+                    anvilTitle = resolved;
+                    defaultText = "Type here...";
+                }
+                final Identifier previousGuiId = def.getId();
+                final int previousPage = currentPage;
 
-                    AnvilGuiHandler.openInput(player, anvilTitle, "Type here...", (sp, text) -> {
-                        GuiVarStore.INSTANCE.set(sp.getUuid(), varKey, text);
-                        dev.toolkitmc.guiapi.loader.GuiRegistry.INSTANCE.get(previousGuiId)
-                                .ifPresent(target -> open(sp, target, previousPage));
-                    });
+                AnvilGuiHandler.openInput(player, anvilTitle, defaultText, (sp, text) -> {
+                    GuiVarStore.INSTANCE.set(sp.getUuid(), varKey, text);
+                    GuiInputStore.INSTANCE.set(sp.getUuid(), text);
+                    dev.toolkitmc.guiapi.loader.GuiRegistry.INSTANCE.get(previousGuiId)
+                            .ifPresent(target -> open(sp, target, previousPage));
+                });
+            }
+            case RUN_FUNCTION -> {
+                String macroName = resolve(action.value(), player, def, currentPage);
+                java.util.List<GuiDefinition.ButtonAction> macroActions = def.getMacros().get(macroName);
+                if (macroActions != null && !macroActions.isEmpty()) {
+                    executeDelayedActionChain(player, def, currentPage, macroActions, 0, false);
                 }
             }
             case CLOSE -> {

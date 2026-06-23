@@ -7,7 +7,7 @@ No client mod required. No macros. No external dependencies beyond Fabric API.
 
 ## Installation
 
-1. Drop `guiapi-1.0.4.jar` into your `mods/` folder.
+1. Drop `guiapi-1.0.5.jar` into your `mods/` folder.
 2. Drop your datapack into `world/datapacks/`.
 3. Run `/reload` or `/guiapi reload`.
 
@@ -220,7 +220,7 @@ Please refer to the updated `example-datapack` directory in the repository sourc
 ```bash
 chmod +x gradlew
 ./gradlew build
-# Output: build/libs/guiapi-1.0.4.jar
+# Output: build/libs/guiapi-1.0.5.jar
 ```
 
 Requires **Java 21**.
