@@ -24,8 +24,6 @@ dependencies {
     modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
     modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
 
-    // Optional Mod Menu integration. The classes are compiled against Mod Menu,
-    // but Mod Menu is only suggested at runtime in fabric.mod.json.
     modCompileOnly "maven.modrinth:modmenu:${project.modmenu_version}"
     modApi "me.shedaniel.cloth:cloth-config-fabric:19.0.147"
 
@@ -68,16 +66,11 @@ jar {
     }
 }
 
-// ────────────────────────────── BUILD TASK İYİLEŞTİRMESİ ──────────────────────────────
-
-tasks.named('build') {
-    dependsOn 'clean'           // Her build öncesi otomatik clean yapar
-    finalizedBy 'remapJar'      // Loom ile uyumlu
-}
+// ────────────────────────────── DÜZELTİLMİŞ BUILD AYARLARI ──────────────────────────────
 
 tasks.register('buildFull') {
     group = 'build'
-    description = 'Clean + Full Build'
+    description = 'Clean + Full Build (Recommended)'
     dependsOn 'clean'
     dependsOn 'build'
 }
