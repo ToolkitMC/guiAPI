@@ -131,12 +131,15 @@ public class GuiDefinition {
      * @param var     Variable key for set_var / add_var / sub_var / reset_var actions
      * @param delay   Action execution delay in ticks
      */
-    public record ButtonAction(ActionType type, String value, RunWith runWith, String var, int delay) {
+    public record ButtonAction(ActionType type, String value, RunWith runWith, String var, int delay, List<ButtonAction> actions) {
         public ButtonAction(ActionType type, String value) {
-            this(type, value, RunWith.PLAYER, "", 0);
+            this(type, value, RunWith.PLAYER, "", 0, List.of());
         }
         public ButtonAction(ActionType type, String value, RunWith runWith) {
-            this(type, value, runWith, "", 0);
+            this(type, value, runWith, "", 0, List.of());
+        }
+        public ButtonAction(ActionType type, String value, RunWith runWith, String var, int delay) {
+            this(type, value, runWith, var, delay, List.of());
         }
     }
 
@@ -527,7 +530,17 @@ public class GuiDefinition {
                 ? RunWith.fromString(a.get("run_with").getAsString())
                 : RunWith.PLAYER;
         int delay = a.has("delay") ? Math.max(0, a.get("delay").getAsInt()) : 0;
-        return new ButtonAction(type, value, runWith, var, delay);
+
+        List<ButtonAction> nestedActions = new ArrayList<>();
+        if (a.has("actions") && a.get("actions").isJsonArray()) {
+            for (JsonElement el : a.getAsJsonArray("actions")) {
+                if (el.isJsonObject()) {
+                    nestedActions.add(parseAction(el.getAsJsonObject()));
+                }
+            }
+        }
+
+        return new ButtonAction(type, value, runWith, var, delay, nestedActions);
     }
 
     // ── Getters ──────────────────────────────────────────────────────────────

@@ -21,7 +21,14 @@
         "§7Saves to {input} and {var:myVar}"
       ],
       "actions": [
-        { "type": "anvil_input", "var": "myVar", "value": "Enter Name|{var:myVar}" }
+        {
+          "type": "anvil_input",
+          "var": "myVar",
+          "value": "Enter Name|{var:myVar}",
+          "actions": [
+            { "type": "message", "value": "§aSaved input: §f{input}" }
+          ]
+        }
       ]
     },
     {

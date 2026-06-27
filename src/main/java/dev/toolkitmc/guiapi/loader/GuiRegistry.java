@@ -198,21 +198,13 @@ public class GuiRegistry extends SinglePreparationResourceReloader<Map<Identifie
 
                 com.google.gson.JsonArray actionsOnArr = new com.google.gson.JsonArray();
                 for (GuiDefinition.ButtonAction act : tgl.actionsOn()) {
-                    JsonObject aObj = new JsonObject();
-                    aObj.addProperty("type", act.type().name().toLowerCase());
-                    aObj.addProperty("value", act.value());
-                    if (!act.var().isEmpty()) aObj.addProperty("var", act.var());
-                    actionsOnArr.add(aObj);
+                    actionsOnArr.add(serializeAction(act));
                 }
                 tObj.add("actions_on", actionsOnArr);
 
                 com.google.gson.JsonArray actionsOffArr = new com.google.gson.JsonArray();
                 for (GuiDefinition.ButtonAction act : tgl.actionsOff()) {
-                    JsonObject aObj = new JsonObject();
-                    aObj.addProperty("type", act.type().name().toLowerCase());
-                    aObj.addProperty("value", act.value());
-                    if (!act.var().isEmpty()) aObj.addProperty("var", act.var());
-                    actionsOffArr.add(aObj);
+                    actionsOffArr.add(serializeAction(act));
                 }
                 tObj.add("actions_off", actionsOffArr);
 
@@ -220,11 +212,7 @@ public class GuiRegistry extends SinglePreparationResourceReloader<Map<Identifie
             } else {
                 com.google.gson.JsonArray actionsArr = new com.google.gson.JsonArray();
                 for (GuiDefinition.ButtonAction act : b.actions()) {
-                    JsonObject aObj = new JsonObject();
-                    aObj.addProperty("type", act.type().name().toLowerCase());
-                    aObj.addProperty("value", act.value());
-                    if (!act.var().isEmpty()) aObj.addProperty("var", act.var());
-                    actionsArr.add(aObj);
+                    actionsArr.add(serializeAction(act));
                 }
                 bObj.add("actions", actionsArr);
             }
@@ -234,6 +222,23 @@ public class GuiRegistry extends SinglePreparationResourceReloader<Map<Identifie
         obj.add("buttons", btnsArray);
 
         return GSON.toJson(obj);
+    }
+
+    private static JsonObject serializeAction(GuiDefinition.ButtonAction act) {
+        JsonObject aObj = new JsonObject();
+        aObj.addProperty("type", act.type().name().toLowerCase());
+        if (!act.value().isEmpty()) aObj.addProperty("value", act.value());
+        if (act.runWith() != GuiDefinition.RunWith.PLAYER) aObj.addProperty("run_with", act.runWith().name().toLowerCase());
+        if (!act.var().isEmpty()) aObj.addProperty("var", act.var());
+        if (act.delay() > 0) aObj.addProperty("delay", act.delay());
+        if (!act.actions().isEmpty()) {
+            com.google.gson.JsonArray nested = new com.google.gson.JsonArray();
+            for (GuiDefinition.ButtonAction nestedAction : act.actions()) {
+                nested.add(serializeAction(nestedAction));
+            }
+            aObj.add("actions", nested);
+        }
+        return aObj;
     }
 
     /** Addon API — register a GUI definition from Java code */

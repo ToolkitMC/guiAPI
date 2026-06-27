@@ -484,13 +484,23 @@ public class GuiApiModMenuEntry implements ModMenuApi {
                     var id = entry.getKey();
                     var def = entry.getValue();
 
-                    ButtonWidget btnWidget = ButtonWidget.builder(
-                            Text.literal("Edit: " + id.getPath() + " (" + def.getRows() + " rows)"),
-                            btn -> MinecraftClient.getInstance().setScreen(new GuiEditorScreen(this, id, def))
-                    ).dimensions(cx - 150, y, 300, 18).build();
+                    TextWidget nameWidget = new TextWidget(cx - 150, y + 4, 120, 10,
+                            Text.literal("§f" + id.toString()), textRenderer);
+                    ButtonWidget editWidget = ButtonWidget.builder(
+                            Text.literal("Edit"),
+                            btn -> MinecraftClient.getInstance().setScreen(new GuiLoadingScreen(this, id, def, GuiLoadingScreen.Mode.OPEN_EDITOR))
+                    ).dimensions(cx - 25, y, 85, 18).build();
+                    ButtonWidget infoWidget = ButtonWidget.builder(
+                            Text.literal("Info"),
+                            btn -> MinecraftClient.getInstance().setScreen(new GuiInfoScreen(this, id, def))
+                    ).dimensions(cx + 65, y, 85, 18).build();
 
-                    addDrawableChild(btnWidget);
-                    scrollableElements.add(new ScrollableElement(btnWidget, btnWidget, y, 18));
+                    addDrawableChild(nameWidget);
+                    addDrawableChild(editWidget);
+                    addDrawableChild(infoWidget);
+                    scrollableElements.add(new ScrollableElement(nameWidget, nameWidget, y, 10));
+                    scrollableElements.add(new ScrollableElement(editWidget, editWidget, y, 18));
+                    scrollableElements.add(new ScrollableElement(infoWidget, infoWidget, y, 18));
                     y += 22;
                 }
             }
@@ -621,6 +631,95 @@ public class GuiApiModMenuEntry implements ModMenuApi {
             return Text.literal(color + level);
         }
     }
+
+    static class GuiLoadingScreen extends Screen {
+        enum Mode { OPEN_EDITOR, CHECK_SLOTS }
+
+        private final Screen parent;
+        private final net.minecraft.util.Identifier id;
+        private final GuiDefinition def;
+        private final Mode mode;
+        private int ticksElapsed = 0;
+
+        GuiLoadingScreen(Screen parent, net.minecraft.util.Identifier id, GuiDefinition def, Mode mode) {
+            super(Text.literal(mode == Mode.CHECK_SLOTS ? "Checking slots..." : "Loading..."));
+            this.parent = parent;
+            this.id = id;
+            this.def = def;
+            this.mode = mode;
+        }
+
+        @Override
+        public void tick() {
+            ticksElapsed++;
+            if (ticksElapsed >= 20) {
+                if (mode == Mode.CHECK_SLOTS && parent instanceof GuiEditorScreen editor) {
+                    MinecraftClient.getInstance().setScreen(new ButtonListScreen(editor, id, def));
+                } else {
+                    MinecraftClient.getInstance().setScreen(new GuiEditorScreen(parent, id, def));
+                }
+            }
+        }
+
+        @Override
+        public void renderBackground(DrawContext context, int mouseX, int mouseY, float delta) {
+        }
+
+        @Override
+        public void render(DrawContext ctx, int mouseX, int mouseY, float delta) {
+            ctx.fill(0, 0, width, height, 0xFF0A0A0A);
+            int cx = width / 2;
+            int cy = height / 2;
+            String msg = mode == Mode.CHECK_SLOTS ? "Checking slots..." : "Loading...";
+            int dots = (ticksElapsed / 8) % 4;
+            ctx.drawCenteredTextWithShadow(textRenderer, Text.literal("§6" + msg + ".".repeat(dots)), cx, cy - 8, 0xFFFFFF);
+            ctx.drawCenteredTextWithShadow(textRenderer, Text.literal("§7" + id.toString()), cx, cy + 8, 0xAAAAAA);
+        }
+    }
+
+    static class GuiInfoScreen extends Screen {
+        private final Screen parent;
+        private final net.minecraft.util.Identifier id;
+        private final GuiDefinition def;
+
+        GuiInfoScreen(Screen parent, net.minecraft.util.Identifier id, GuiDefinition def) {
+            super(Text.literal("GUI Info"));
+            this.parent = parent;
+            this.id = id;
+            this.def = def;
+        }
+
+        @Override
+        protected void init() {
+            int cx = width / 2;
+            addDrawableChild(ButtonWidget.builder(Text.literal("Back"), btn ->
+                    MinecraftClient.getInstance().setScreen(parent))
+                    .dimensions(cx - 50, height - 25, 100, 20).build());
+        }
+
+        @Override
+        public void render(DrawContext ctx, int mouseX, int mouseY, float delta) {
+            super.render(ctx, mouseX, mouseY, delta);
+            int cx = width / 2;
+            int y = 30;
+            ctx.drawCenteredTextWithShadow(textRenderer, Text.literal("§6GUI Info"), cx, 10, 0xFFFFFF);
+            ctx.drawTextWithShadow(textRenderer, Text.literal("§eID: §f" + id), cx - 150, y, 0xFFFFFF); y += 14;
+            ctx.drawTextWithShadow(textRenderer, Text.literal("§eTitle: §f" + def.getTitle()), cx - 150, y, 0xFFFFFF); y += 14;
+            ctx.drawTextWithShadow(textRenderer, Text.literal("§eRows: §f" + def.getRows()), cx - 150, y, 0xFFFFFF); y += 14;
+            ctx.drawTextWithShadow(textRenderer, Text.literal("§ePages: §f" + def.getPageCount()), cx - 150, y, 0xFFFFFF); y += 14;
+            ctx.drawTextWithShadow(textRenderer, Text.literal("§eButtons: §f" + def.getButtons().size()), cx - 150, y, 0xFFFFFF); y += 14;
+            ctx.drawTextWithShadow(textRenderer, Text.literal("§eContainer: §f" + def.getContainerType().name().toLowerCase()), cx - 150, y, 0xFFFFFF); y += 14;
+            ctx.drawTextWithShadow(textRenderer, Text.literal("§eTick rate: §f" + def.getTickRate()), cx - 150, y, 0xFFFFFF); y += 14;
+            ctx.drawTextWithShadow(textRenderer, Text.literal("§eclose_on_move: §f" + def.isCloseOnMove()), cx - 150, y, 0xFFFFFF); y += 14;
+            ctx.drawTextWithShadow(textRenderer, Text.literal("§eFiller: §f" + (def.getFiller().isPresent() ? "configured" : "none")), cx - 150, y, 0xFFFFFF); y += 14;
+            ctx.drawTextWithShadow(textRenderer, Text.literal("§eMacros: §f" + def.getMacros().size()), cx - 150, y, 0xFFFFFF);
+        }
+
+        @Override
+        public void close() {
+            MinecraftClient.getInstance().setScreen(parent);
+        }
+    }
         // ── GUI Editor Screen ────────────────────────────────────────────────────
 
     static class GuiEditorScreen extends Screen {
@@ -717,15 +816,15 @@ public class GuiApiModMenuEntry implements ModMenuApi {
             ).dimensions(cx - 150, y, 300, 18).build());
             y += 22;
 
-            // Edit Buttons Navigation
-            addDrawableChild(ButtonWidget.builder(Text.literal("§bEdit GUI Buttons"), btn ->
-                    MinecraftClient.getInstance().setScreen(new ButtonListScreen(this, id, def))
+            // Edit Slots Navigation
+            addDrawableChild(ButtonWidget.builder(Text.literal("§bEdit Slots"), btn ->
+                    MinecraftClient.getInstance().setScreen(new GuiLoadingScreen(this, id, def, GuiLoadingScreen.Mode.CHECK_SLOTS))
             ).dimensions(cx - 150, y, 300, 18).build());
             y += 28;
 
             // Action Buttons
-            // Save & Back — Open loading screen to search datapack and write JSON directly
-            addDrawableChild(ButtonWidget.builder(Text.literal("Apply & Back"), btn -> {
+            // Done — Open loading screen to search datapack and write JSON directly
+            addDrawableChild(ButtonWidget.builder(Text.literal("Done"), btn -> {
                 GuiDefinition newDef = GuiDefinition.create(
                         def.getId(),
                         titleField.getText(),
@@ -779,7 +878,7 @@ public class GuiApiModMenuEntry implements ModMenuApi {
 
     static class GuiSaveProcessScreen extends Screen {
         enum State {
-            CONFIRM_SAVE,
+            MODIFYING_PROGRESS,
             SAVING_PROGRESS,
             CONFIRM_RELOAD,
             RELOADING_SPINNER
@@ -790,7 +889,7 @@ public class GuiApiModMenuEntry implements ModMenuApi {
         private final net.minecraft.util.Identifier id;
         private final GuiDefinition newDef;
 
-        private State state = State.CONFIRM_SAVE;
+        private State state = State.MODIFYING_PROGRESS;
         private int ticksElapsed = 0;
 
         GuiSaveProcessScreen(Screen settingsScreen, Screen editorScreen, net.minecraft.util.Identifier id, GuiDefinition newDef) {
@@ -809,16 +908,7 @@ public class GuiApiModMenuEntry implements ModMenuApi {
             int cx = width / 2;
             int cy = height / 2;
 
-            if (state == State.CONFIRM_SAVE) {
-                addDrawableChild(ButtonWidget.builder(Text.literal("Yes, Save Changes"), btn -> {
-                    state = State.SAVING_PROGRESS;
-                    this.init();
-                }).dimensions(cx - 110, cy + 20, 100, 20).build());
-
-                addDrawableChild(ButtonWidget.builder(Text.literal("No, Back"), btn -> {
-                    MinecraftClient.getInstance().setScreen(editorScreen);
-                }).dimensions(cx + 10, cy + 20, 100, 20).build());
-            } else if (state == State.CONFIRM_RELOAD) {
+            if (state == State.CONFIRM_RELOAD) {
                 addDrawableChild(ButtonWidget.builder(Text.literal("Yes, Reload"), btn -> {
                     if (MinecraftClient.getInstance().player != null) {
                         MinecraftClient.getInstance().player.networkHandler.sendChatCommand("guiapi reload");
@@ -835,7 +925,13 @@ public class GuiApiModMenuEntry implements ModMenuApi {
 
         @Override
         public void tick() {
-            if (state == State.SAVING_PROGRESS) {
+            if (state == State.MODIFYING_PROGRESS) {
+                ticksElapsed++;
+                if (ticksElapsed >= 25) {
+                    state = State.SAVING_PROGRESS;
+                    this.init();
+                }
+            } else if (state == State.SAVING_PROGRESS) {
                 ticksElapsed++;
                 if (ticksElapsed >= 40) {
                     MinecraftServer server = MinecraftClient.getInstance().getServer();
@@ -864,7 +960,7 @@ public class GuiApiModMenuEntry implements ModMenuApi {
             // Draw a highly professional solid opaque dark background manually
             ctx.fill(0, 0, width, height, 0xFF0A0A0A);
 
-            if (state == State.CONFIRM_SAVE || state == State.CONFIRM_RELOAD) {
+            if (state == State.CONFIRM_RELOAD) {
                 super.render(ctx, mouseX, mouseY, delta);
             }
 
@@ -875,17 +971,13 @@ public class GuiApiModMenuEntry implements ModMenuApi {
             int rainbowColor = java.awt.Color.HSBtoRGB((time % 1500) / 1500f, 0.8f, 0.8f);
 
             switch (state) {
-                case CONFIRM_SAVE -> {
-                    ctx.drawCenteredTextWithShadow(textRenderer, Text.literal("§6★ Save Confirmation ★"), cx, cy - 30, 0xFFFFFF);
-                    ctx.drawCenteredTextWithShadow(textRenderer, Text.literal("§fAre you sure you want to write changes to disk?"), cx, cy - 10, 0xAAAAAA);
+                case MODIFYING_PROGRESS -> {
+                    ctx.drawCenteredTextWithShadow(textRenderer, Text.literal("§6★ Modifying Data Pack... ★"), cx, cy - 35, 0xFFFFFF);
+                    ctx.drawCenteredTextWithShadow(textRenderer, Text.literal("Preparing safe write steps..."), cx, cy - 10, rainbowColor);
                 }
                 case SAVING_PROGRESS -> {
-                    String status = "Locating Datapack Folder...";
-                    if (ticksElapsed >= 20) {
-                        status = "Overwriting Datapack JSON File...";
-                    }
-                    ctx.drawCenteredTextWithShadow(textRenderer, Text.literal("§6★ Writing Datapack ★"), cx, cy - 40, 0xFFFFFF);
-                    ctx.drawCenteredTextWithShadow(textRenderer, Text.literal(status), cx, cy - 10, rainbowColor);
+                    ctx.drawCenteredTextWithShadow(textRenderer, Text.literal("§6★ Saving Slots... ★"), cx, cy - 40, 0xFFFFFF);
+                    ctx.drawCenteredTextWithShadow(textRenderer, Text.literal("Saving slots..."), cx, cy - 10, rainbowColor);
 
                     int barWidth = 160;
                     int progress = Math.min(barWidth, (ticksElapsed * barWidth) / 40);
@@ -1068,7 +1160,7 @@ public class GuiApiModMenuEntry implements ModMenuApi {
             int cx = width / 2;
             int y = 30;
 
-            addDrawableChild(new TextWidget(cx - 150, y, 300, 10, Text.literal("§eSelect a button to edit or delete:"), textRenderer));
+            addDrawableChild(new TextWidget(cx - 150, y, 300, 10, Text.literal("§eSelect a slot to edit, add, or delete:"), textRenderer));
             y += 12;
 
             int buttonsPerPage = 6;
@@ -1076,7 +1168,7 @@ public class GuiApiModMenuEntry implements ModMenuApi {
             if (listPage >= totalPages) listPage = totalPages - 1;
 
             addDrawableChild(new TextWidget(cx - 150, y, 300, 10,
-                    Text.literal("§7Loaded Buttons: §f" + buttonsList.size() + " (Page " + (listPage + 1) + "/" + totalPages + ")"),
+                    Text.literal("§7Loaded Slots: §f" + buttonsList.size() + " (Page " + (listPage + 1) + "/" + totalPages + ")"),
                     textRenderer));
             y += 14;
 
@@ -1086,11 +1178,11 @@ public class GuiApiModMenuEntry implements ModMenuApi {
             for (int i = startIdx; i < endIdx; i++) {
                 final int index = i;
                 GuiDefinition.Button btn = buttonsList.get(index);
-                String labelText = "Slot " + btn.slot() + ": " +
+                String labelText = "Slot " + btn.slot() + " / Page " + (btn.page() + 1) + ": " +
                         (btn.name().isEmpty() ? btn.item() : btn.name());
 
                 addDrawableChild(ButtonWidget.builder(Text.literal(labelText), b -> {
-                    MinecraftClient.getInstance().setScreen(createButtonEditorScreen(this, index, btn, this));
+                    MinecraftClient.getInstance().setScreen(new ButtonEditorScreen(this, index, btn));
                 }).dimensions(cx - 150, y, 300, 18).build());
 
                 y += 20;
@@ -1119,18 +1211,18 @@ public class GuiApiModMenuEntry implements ModMenuApi {
             y = height - 30;
 
             // Add New Button
-            addDrawableChild(ButtonWidget.builder(Text.literal("§aAdd New Button"), btn -> {
+            addDrawableChild(ButtonWidget.builder(Text.literal("§aAdd Slot"), btn -> {
                 GuiDefinition.Button newBtn = new GuiDefinition.Button(
                         0, listPage, "minecraft:stone", "New Button", List.of(), false,
                         GuiDefinition.ClickType.ANY, Optional.empty(), List.of(), Optional.empty(),
                         Optional.empty(), Optional.empty(), "1", false, false
                 );
                 buttonsList.add(newBtn);
-                MinecraftClient.getInstance().setScreen(createButtonEditorScreen(this, buttonsList.size() - 1, newBtn, this));
+                MinecraftClient.getInstance().setScreen(new ButtonEditorScreen(this, buttonsList.size() - 1, newBtn));
             }).dimensions(cx - 155, y, 100, 20).build());
 
             // Save & Back
-            addDrawableChild(ButtonWidget.builder(Text.literal("Save Buttons"), btn -> {
+            addDrawableChild(ButtonWidget.builder(Text.literal("Save Slots"), btn -> {
                 parent.updateButtons(buttonsList);
                 MinecraftClient.getInstance().setScreen(parent);
             }).dimensions(cx - 50, y, 100, 20).build());
@@ -1145,7 +1237,7 @@ public class GuiApiModMenuEntry implements ModMenuApi {
         public void render(DrawContext ctx, int mouseX, int mouseY, float delta) {
             super.render(ctx, mouseX, mouseY, delta);
             ctx.drawCenteredTextWithShadow(textRenderer,
-                    Text.literal("§6Buttons Editor — " + id.getPath()), width / 2, 10, 0xFFFFFF);
+                    Text.literal("§6Slot Editor — " + id.getPath()), width / 2, 10, 0xFFFFFF);
             ctx.fill(width / 2 - 150, height - 38, width / 2 + 150, height - 37, 0x44FFFFFF);
         }
 
@@ -1161,177 +1253,11 @@ public class GuiApiModMenuEntry implements ModMenuApi {
     }
         // ── Button Properties Editor Screen ──────────────────────────────────────
 
-    public static Screen createButtonEditorScreen(Screen parent, int index, GuiDefinition.Button btn, ButtonListScreen listScreen) {
-        me.shedaniel.clothconfig2.api.ConfigBuilder builder = me.shedaniel.clothconfig2.api.ConfigBuilder.create()
-            .setParentScreen(parent)
-            .setTitle(Text.literal("Edit Button Properties"));
-
-        me.shedaniel.clothconfig2.api.ConfigCategory basicCat = builder.getOrCreateCategory(Text.literal("Basic"));
-        me.shedaniel.clothconfig2.api.ConfigCategory appearanceCat = builder.getOrCreateCategory(Text.literal("Appearance"));
-        me.shedaniel.clothconfig2.api.ConfigCategory logicCat = builder.getOrCreateCategory(Text.literal("Logic"));
-
-        me.shedaniel.clothconfig2.api.ConfigEntryBuilder entryBuilder = builder.entryBuilder();
-
-        final int[] slot = {btn.slot()};
-        final int[] amount = {1};
-        try { amount[0] = Integer.parseInt(btn.amount()); } catch (Exception ignored) {}
-        final int[] pageVal = {btn.page()};
-        final String[] itemText = {btn.item()};
-        final String[] nameText = {btn.name()};
-        final boolean[] glint = {btn.glint()};
-        final GuiDefinition.ClickType[] clickType = {btn.clickType()};
-        final String[] loreText = {String.join(";", btn.lore())};
-        final String[] actionsText = {serializeActionsToString(btn.actions())};
-        final String[] conditionText = {btn.condition().isPresent() ? btn.condition().get().type().name().toLowerCase() + ":" + btn.condition().get().value() : ""};
-
-        // --- Basic Category ---
-        basicCat.addEntry(entryBuilder.startIntSlider(Text.literal("Page (1-10)"), pageVal[0], 0, 9)
-            .setDefaultValue(0)
-            .setSaveConsumer(v -> pageVal[0] = v)
-            .build());
-
-        basicCat.addEntry(entryBuilder.startIntSlider(Text.literal("Slot Position"), slot[0], 0, 53)
-            .setDefaultValue(0)
-            .setSaveConsumer(v -> slot[0] = v)
-            .build());
-
-        basicCat.addEntry(entryBuilder.startIntSlider(Text.literal("Amount"), amount[0], 1, 99)
-            .setDefaultValue(1)
-            .setSaveConsumer(v -> amount[0] = v)
-            .build());
-
-        basicCat.addEntry(entryBuilder.startTextField(Text.literal("Item ID"), itemText[0])
-            .setDefaultValue("minecraft:stone")
-            .setSaveConsumer(v -> itemText[0] = v)
-            .build());
-
-        basicCat.addEntry(entryBuilder.startTextField(Text.literal("Display Name"), nameText[0])
-            .setDefaultValue("")
-            .setSaveConsumer(v -> nameText[0] = v)
-            .build());
-
-
-        // --- Appearance Category ---
-        appearanceCat.addEntry(entryBuilder.startBooleanToggle(Text.literal("Enable Glint"), glint[0])
-            .setDefaultValue(false)
-            .setSaveConsumer(v -> glint[0] = v)
-            .build());
-
-        appearanceCat.addEntry(entryBuilder.startTextField(Text.literal("Lore Lines (separated by ';')"), loreText[0])
-            .setDefaultValue("")
-            .setSaveConsumer(v -> loreText[0] = v)
-            .build());
-
-
-        // --- Logic Category ---
-        logicCat.addEntry(entryBuilder.startSelector(Text.literal("Click Type"), new String[]{"ANY", "LEFT", "RIGHT", "SHIFT"}, clickType[0].name())
-            .setDefaultValue("ANY")
-            .setSaveConsumer(v -> clickType[0] = GuiDefinition.ClickType.valueOf(v))
-            .build());
-
-        logicCat.addEntry(entryBuilder.startTextField(Text.literal("Condition (type:value)"), conditionText[0])
-            .setDefaultValue("")
-            .setSaveConsumer(v -> conditionText[0] = v)
-            .build());
-
-        logicCat.addEntry(entryBuilder.startTextField(Text.literal("Actions (separated by ';')"), actionsText[0])
-            .setDefaultValue("")
-            .setSaveConsumer(v -> actionsText[0] = v)
-            .build());
-
-        builder.setSavingRunnable(() -> {
-            int targetSlot = slot[0];
-            boolean duplicate = false;
-            for (int i = 0; i < listScreen.buttonsList.size(); i++) {
-                if (i == index) continue;
-                GuiDefinition.Button existing = listScreen.buttonsList.get(i);
-                if (existing.slot() == targetSlot && existing.page() == pageVal[0]) {
-                    duplicate = true;
-                    break;
-                }
-            }
-            if (duplicate) {
-                int emptySlot = targetSlot;
-                for (int s = 0; s < 54; s++) {
-                    boolean slotUsed = false;
-                    for (int i = 0; i < listScreen.buttonsList.size(); i++) {
-                        if (i == index) continue;
-                        GuiDefinition.Button existing = listScreen.buttonsList.get(i);
-                        if (existing.slot() == s && existing.page() == pageVal[0]) {
-                            slotUsed = true;
-                            break;
-                        }
-                    }
-                    if (!slotUsed) {
-                        emptySlot = s;
-                        break;
-                    }
-                }
-                targetSlot = emptySlot;
-            }
-
-            List<String> finalLore = new ArrayList<>();
-            if (!loreText[0].isEmpty()) {
-                for (String s : loreText[0].split(";")) {
-                    finalLore.add(s);
-                }
-            }
-
-            List<GuiDefinition.ButtonAction> finalActions = new ArrayList<>();
-            if (!actionsText[0].isEmpty()) {
-                for (String s : actionsText[0].split(";")) {
-                    finalActions.add(parseActionFromString(s));
-                }
-            }
-            if (finalActions.isEmpty()) {
-                finalActions.add(new GuiDefinition.ButtonAction(GuiDefinition.ActionType.NONE, ""));
-            }
-
-            Optional<GuiDefinition.ButtonCondition> finalCondition = Optional.empty();
-            if (!conditionText[0].isEmpty()) {
-                String[] condParts = conditionText[0].split(":", 2);
-                if (condParts.length == 2) {
-                    try {
-                        GuiDefinition.ConditionType ct = GuiDefinition.ConditionType.fromString(condParts[0]);
-                        finalCondition = Optional.of(new GuiDefinition.ButtonCondition(ct, condParts[1]));
-                    } catch (Exception ignored) {}
-                }
-            }
-
-            GuiDefinition.Button newBtn = new GuiDefinition.Button(
-                    targetSlot,
-                    pageVal[0],
-                    itemText[0],
-                    nameText[0],
-                    finalLore,
-                    glint[0],
-                    clickType[0],
-                    finalCondition,
-                    finalActions,
-                    btn.toggle(),
-                    btn.customModelData(),
-                    btn.itemModel(),
-                    String.valueOf(amount[0]),
-                    btn.hideTooltip(),
-                    btn.hideAdditionalTooltip()
-            );
-
-            listScreen.updateButton(index, newBtn);
-        });
-
-        return builder.build();
-    }
-
     static class ButtonEditorScreen extends Screen {
-        private enum Tab {
-            BASIC, APPEARANCE, LOGIC
-        }
 
         private final ButtonListScreen parent;
         private final int index;
         private final GuiDefinition.Button btn;
-
-        private Tab currentTab = Tab.BASIC;
 
         private TextFieldWidget itemField;
         private TextFieldWidget nameField;
@@ -1354,7 +1280,7 @@ public class GuiApiModMenuEntry implements ModMenuApi {
         private String conditionText;
 
         ButtonEditorScreen(ButtonListScreen parent, int index, GuiDefinition.Button btn) {
-            super(Text.literal("Edit Button"));
+            super(Text.literal("Edit Slot"));
             this.parent = parent;
             this.index = index;
             this.btn = btn;
@@ -1400,32 +1326,7 @@ public class GuiApiModMenuEntry implements ModMenuApi {
             int cx = width / 2;
             this.clearChildren();
 
-            // 1. Add Tab buttons
-            ButtonWidget basicTabBtn = ButtonWidget.builder(Text.literal(currentTab == Tab.BASIC ? "§aBasic" : "§7Basic"), btn -> {
-                saveCurrentTabFields();
-                currentTab = Tab.BASIC;
-                this.init();
-            }).dimensions(cx - 125, 22, 80, 18).build();
-            basicTabBtn.active = (currentTab != Tab.BASIC);
-            addDrawableChild(basicTabBtn);
-
-            ButtonWidget appTabBtn = ButtonWidget.builder(Text.literal(currentTab == Tab.APPEARANCE ? "§aAppearance" : "§7Appearance"), btn -> {
-                saveCurrentTabFields();
-                currentTab = Tab.APPEARANCE;
-                this.init();
-            }).dimensions(cx - 40, 22, 80, 18).build();
-            appTabBtn.active = (currentTab != Tab.APPEARANCE);
-            addDrawableChild(appTabBtn);
-
-            ButtonWidget logicTabBtn = ButtonWidget.builder(Text.literal(currentTab == Tab.LOGIC ? "§aLogic" : "§7Logic"), btn -> {
-                saveCurrentTabFields();
-                currentTab = Tab.LOGIC;
-                this.init();
-            }).dimensions(cx + 45, 22, 80, 18).build();
-            logicTabBtn.active = (currentTab != Tab.LOGIC);
-            addDrawableChild(logicTabBtn);
-
-            // 2. Add bottom buttons
+            // 1. Add bottom buttons
             addDrawableChild(ButtonWidget.builder(Text.literal("Apply"), b -> {
                 saveCurrentTabFields();
 
@@ -1511,7 +1412,7 @@ public class GuiApiModMenuEntry implements ModMenuApi {
                 MinecraftClient.getInstance().setScreen(parent);
             }).dimensions(cx - 155, height - 25, 100, 20).build());
 
-            addDrawableChild(ButtonWidget.builder(Text.literal("§cDelete Button"), b -> {
+            addDrawableChild(ButtonWidget.builder(Text.literal("§cDelete Slot"), b -> {
                 parent.deleteButton(index);
                 MinecraftClient.getInstance().setScreen(parent);
             }).dimensions(cx - 50, height - 25, 100, 20).build());
@@ -1520,10 +1421,8 @@ public class GuiApiModMenuEntry implements ModMenuApi {
                     MinecraftClient.getInstance().setScreen(parent))
                     .dimensions(cx + 55, height - 25, 100, 20).build());
 
-            // 3. Tab Specific Inputs
-            int startY = 48;
-            if (currentTab == Tab.BASIC) {
-                int y = startY;
+            // 2. Slot fields (single-page editor; no tabs)
+            int y = 48;
 
                 // Page selection slider (Page 1-10)
                 IntegerSliderWidget pageSlider = new IntegerSliderWidget(cx - 150, y, 300, 20, "Page (1-10)", 0, 9, pageVal, val -> pageVal = val);
@@ -1554,9 +1453,7 @@ public class GuiApiModMenuEntry implements ModMenuApi {
                 nameField.setMaxLength(128);
                 nameField.setText(nameText);
                 addDrawableChild(nameField);
-
-            } else if (currentTab == Tab.APPEARANCE) {
-                int y = startY;
+                y += 34;
 
                 // Glint Toggle
                 addDrawableChild(new TextWidget(cx - 150, y + 4, 200, 10, Text.literal("§eEnable Glint"), textRenderer));
@@ -1581,9 +1478,7 @@ public class GuiApiModMenuEntry implements ModMenuApi {
                 loreField.setMaxLength(512);
                 loreField.setText(loreText);
                 addDrawableChild(loreField);
-
-            } else if (currentTab == Tab.LOGIC) {
-                int y = startY;
+                y += 34;
 
                 // Click Type
                 addDrawableChild(new TextWidget(cx - 150, y + 4, 200, 10, Text.literal("§eClick Type"), textRenderer));
@@ -1608,14 +1503,13 @@ public class GuiApiModMenuEntry implements ModMenuApi {
                 actionsField.setMaxLength(512);
                 actionsField.setText(actionsText);
                 addDrawableChild(actionsField);
-            }
         }
 
         @Override
         public void render(DrawContext ctx, int mouseX, int mouseY, float delta) {
             super.render(ctx, mouseX, mouseY, delta);
             ctx.drawCenteredTextWithShadow(textRenderer,
-                    Text.literal("§6Edit Button Properties"), width / 2, 8, 0xFFFFFF);
+                    Text.literal("§6Edit Slot Properties"), width / 2, 8, 0xFFFFFF);
             ctx.fill(width / 2 - 150, height - 32, width / 2 + 150, height - 31, 0x44FFFFFF);
         }
 

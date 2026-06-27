@@ -703,12 +703,18 @@ public class BarrelGuiHandler {
                 }
                 final Identifier previousGuiId = def.getId();
                 final int previousPage = currentPage;
+                final java.util.List<GuiDefinition.ButtonAction> afterInputActions = action.actions();
 
                 AnvilGuiHandler.openInput(player, anvilTitle, defaultText, (sp, text) -> {
                     GuiVarStore.INSTANCE.set(sp.getUuid(), varKey, text);
                     GuiInputStore.INSTANCE.set(sp.getUuid(), text);
                     dev.toolkitmc.guiapi.loader.GuiRegistry.INSTANCE.get(previousGuiId)
-                            .ifPresent(target -> open(sp, target, previousPage));
+                            .ifPresent(target -> {
+                                if (!afterInputActions.isEmpty()) {
+                                    executeDelayedActionChain(sp, target, previousPage, afterInputActions, 0, false);
+                                }
+                                open(sp, target, previousPage);
+                            });
                 });
             }
             case RUN_FUNCTION -> {
