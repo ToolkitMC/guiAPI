@@ -68,6 +68,20 @@ jar {
     }
 }
 
+// ────────────────────────────── BUILD TASK İYİLEŞTİRMESİ ──────────────────────────────
+
+tasks.named('build') {
+    dependsOn 'clean'           // Her build öncesi otomatik clean yapar
+    finalizedBy 'remapJar'      // Loom ile uyumlu
+}
+
+tasks.register('buildFull') {
+    group = 'build'
+    description = 'Clean + Full Build'
+    dependsOn 'clean'
+    dependsOn 'build'
+}
+
 publishing {
     publications {
         mavenJava(MavenPublication) {
