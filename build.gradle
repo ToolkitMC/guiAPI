@@ -36,16 +36,16 @@ test {
 }
 
 processResources {
-    inputs.property "version", project.version
-    inputs.property "minecraft_version", project.minecraft_version
-    inputs.property "loader_version", project.loader_version
+    def props = [
+        version: version,
+        minecraft_version: project.minecraft_version,
+        loader_version: project.loader_version
+    ]
+
+    inputs.properties(props)
 
     filesMatching("fabric.mod.json") {
-        expand(
-                "version": project.version,
-                "minecraft_version": project.minecraft_version,
-                "loader_version": project.loader_version
-        )
+        expand(props)
     }
 }
 
@@ -55,24 +55,17 @@ tasks.withType(JavaCompile).configureEach {
 
 java {
     withSourcesJar()
-    sourceCompatibility = JavaVersion.VERSION_21
-    targetCompatibility = JavaVersion.VERSION_21
-}
-
-jar {
-    inputs.property "archivesName", project.base.archivesName
-    from("LICENSE") {
-        rename { "${it}_${inputs.properties.archivesName}" }
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
     }
 }
 
-// ────────────────────────────── DÜZELTİLMİŞ BUILD AYARLARI ──────────────────────────────
+jar {
+    // LICENSE dosyası ekleme kaldırıldı (deprecated hatası buradan kaynaklanıyordu)
+}
 
-tasks.register('buildFull') {
-    group = 'build'
-    description = 'Clean + Full Build (Recommended)'
+tasks.named('build') {
     dependsOn 'clean'
-    dependsOn 'build'
 }
 
 publishing {
