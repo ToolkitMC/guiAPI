@@ -108,7 +108,7 @@ public class GuiApiModMenuEntry implements ModMenuApi {
         private boolean logCommands;
         private int     defaultTickRate;
 
-        private Tab currentTab = Tab.CONFIG;
+        private Tab currentTab = Tab.GUIS;
         private final List<ScrollableElement> scrollableElements = new ArrayList<>();
         private double scrollY = 0;
         private int maxScrollY = 0;
@@ -178,9 +178,12 @@ public class GuiApiModMenuEntry implements ModMenuApi {
             scrollableElements.clear();
 
             // 1. Add persistent Tab Selectors (Fixed at Top)
-            ButtonWidget configTabBtn = ButtonWidget.builder(Text.literal("§eSettings Screen"), btn -> {
-                MinecraftClient.getInstance().setScreen(new GuiApiModMenuEntry().getModConfigScreenFactory().create(parent));
+            ButtonWidget configTabBtn = ButtonWidget.builder(Text.literal(currentTab == Tab.CONFIG ? "§aSettings" : "§7Settings"), btn -> {
+                currentTab = Tab.CONFIG;
+                scrollY = 0;
+                this.init();
             }).dimensions(cx - 125, 22, 80, 18).build();
+            configTabBtn.active = (currentTab != Tab.CONFIG);
             addDrawableChild(configTabBtn);
 
             ButtonWidget guisTabBtn = ButtonWidget.builder(Text.literal(currentTab == Tab.GUIS ? "§aLoaded GUIs" : "§7Loaded GUIs"), btn -> {
@@ -1153,6 +1156,9 @@ public class GuiApiModMenuEntry implements ModMenuApi {
         private String actionsText;
         private String conditionText;
 
+        private double scrollY = 0;
+        private int maxScrollY = 0;
+
         ButtonEditorScreen(ButtonListScreen parent, int index, GuiDefinition.Button btn) {
             super(Text.literal("Edit Slot"));
             this.parent = parent;
@@ -1193,6 +1199,27 @@ public class GuiApiModMenuEntry implements ModMenuApi {
             if (loreField != null) loreText = loreField.getText();
             if (actionsField != null) actionsText = actionsField.getText();
             if (conditionField != null) conditionText = conditionField.getText();
+        }
+
+        private int scrollTop() { return 42; }
+        private int scrollBottom() { return height - 34; }
+
+        private <T extends net.minecraft.client.gui.widget.ClickableWidget> T addScrolled(T widget, int originalY, int widgetHeight) {
+            int newY = originalY - (int)scrollY;
+            widget.setY(newY);
+            boolean visible = newY + widgetHeight > scrollTop() && newY < scrollBottom();
+            widget.visible = visible;
+            widget.active = visible;
+            addDrawableChild(widget);
+            return widget;
+        }
+
+        private void scrollBy(double amount) {
+            saveCurrentTabFields();
+            scrollY += amount;
+            if (scrollY < 0) scrollY = 0;
+            if (scrollY > maxScrollY) scrollY = maxScrollY;
+            this.init();
         }
 
         @Override
@@ -1295,88 +1322,101 @@ public class GuiApiModMenuEntry implements ModMenuApi {
                     MinecraftClient.getInstance().setScreen(parent))
                     .dimensions(cx + 55, height - 25, 100, 20).build());
 
+            ButtonWidget upBtn = ButtonWidget.builder(Text.literal("▲"), b -> scrollBy(-28))
+                    .dimensions(cx + 160, 48, 24, 20).build();
+            upBtn.active = scrollY > 0;
+            addDrawableChild(upBtn);
+            ButtonWidget downBtn = ButtonWidget.builder(Text.literal("▼"), b -> scrollBy(28))
+                    .dimensions(cx + 160, 72, 24, 20).build();
+            addDrawableChild(downBtn);
+
             // 2. Slot fields (single-page editor; no tabs)
             int y = 48;
 
                 // Page selection slider (Page 1-10)
                 IntegerSliderWidget pageSlider = new IntegerSliderWidget(cx - 150, y, 300, 20, "Page (1-10)", 0, 9, pageVal, val -> pageVal = val);
-                addDrawableChild(pageSlider);
+                addScrolled(pageSlider, y, 20);
                 y += 24;
 
                 // Slot selection slider (Slot 0-53)
                 IntegerSliderWidget slotSlider = new IntegerSliderWidget(cx - 150, y, 300, 20, "Slot Position", 0, 53, slot, val -> slot = val);
-                addDrawableChild(slotSlider);
+                addScrolled(slotSlider, y, 20);
                 y += 24;
 
                 // Amount selection slider (Amount 1-99)
                 IntegerSliderWidget amountSlider = new IntegerSliderWidget(cx - 150, y, 300, 20, "Amount", 1, 99, amount, val -> amount = val);
-                addDrawableChild(amountSlider);
+                addScrolled(amountSlider, y, 20);
                 y += 24;
 
                 // Item ID Input (Text Field)
-                addDrawableChild(new TextWidget(cx - 150, y, 300, 10, Text.literal("§eItem ID"), textRenderer));
+                addScrolled(new TextWidget(cx - 150, y, 300, 10, Text.literal("§eItem ID"), textRenderer), y, 10);
                 itemField = new TextFieldWidget(textRenderer, cx - 150, y + 12, 300, 18, Text.literal("Item ID"));
                 itemField.setMaxLength(256);
                 itemField.setText(itemText);
-                addDrawableChild(itemField);
+                addScrolled(itemField, y + 12, 18);
                 y += 34;
 
                 // Display Name Input (Text Field)
-                addDrawableChild(new TextWidget(cx - 150, y, 300, 10, Text.literal("§eDisplay Name"), textRenderer));
+                addScrolled(new TextWidget(cx - 150, y, 300, 10, Text.literal("§eDisplay Name"), textRenderer), y, 10);
                 nameField = new TextFieldWidget(textRenderer, cx - 150, y + 12, 300, 18, Text.literal("Display Name"));
                 nameField.setMaxLength(128);
                 nameField.setText(nameText);
-                addDrawableChild(nameField);
+                addScrolled(nameField, y + 12, 18);
                 y += 34;
 
                 // Glint Toggle
-                addDrawableChild(new TextWidget(cx - 150, y + 4, 200, 10, Text.literal("§eEnable Glint"), textRenderer));
+                addScrolled(new TextWidget(cx - 150, y + 4, 200, 10, Text.literal("§eEnable Glint"), textRenderer), y + 4, 10);
                 ButtonWidget glintBtn = ButtonWidget.builder(toggleText(glint), b -> {
                     glint = !glint;
                     b.setMessage(toggleText(glint));
                 }).dimensions(cx + 60, y, 40, 18).build();
-                addDrawableChild(glintBtn);
+                addScrolled(glintBtn, y, 18);
                 y += 24;
 
                 // Toggle Button Navigation
-                addDrawableChild(new TextWidget(cx - 150, y + 4, 200, 10, Text.literal("§eToggle Properties"), textRenderer));
+                addScrolled(new TextWidget(cx - 150, y + 4, 200, 10, Text.literal("§eToggle Properties"), textRenderer), y + 4, 10);
                 ButtonWidget toggleBtn = ButtonWidget.builder(Text.literal(toggle.isPresent() ? "§aCONFIGURED" : "§cDISABLED"), b -> {
                     MinecraftClient.getInstance().setScreen(new ToggleEditorScreen(this, toggle));
                 }).dimensions(cx + 40, y, 110, 18).build();
-                addDrawableChild(toggleBtn);
+                addScrolled(toggleBtn, y, 18);
                 y += 26;
 
                 // Lore Input
-                addDrawableChild(new TextWidget(cx - 150, y, 300, 10, Text.literal("§eLore Lines (Separate by semicolon ';')"), textRenderer));
+                addScrolled(new TextWidget(cx - 150, y, 300, 10, Text.literal("§eLore Lines (Separate by semicolon ';')"), textRenderer), y, 10);
                 loreField = new TextFieldWidget(textRenderer, cx - 150, y + 12, 300, 18, Text.literal("Lore"));
                 loreField.setMaxLength(512);
                 loreField.setText(loreText);
-                addDrawableChild(loreField);
+                addScrolled(loreField, y + 12, 18);
                 y += 34;
 
                 // Click Type
-                addDrawableChild(new TextWidget(cx - 150, y + 4, 200, 10, Text.literal("§eClick Type"), textRenderer));
+                addScrolled(new TextWidget(cx - 150, y + 4, 200, 10, Text.literal("§eClick Type"), textRenderer), y + 4, 10);
                 ButtonWidget clickTypeBtn = ButtonWidget.builder(Text.literal(clickType.name()), b -> {
                     clickType = nextClickType(clickType);
                     b.setMessage(Text.literal(clickType.name()));
                 }).dimensions(cx + 60, y, 60, 18).build();
-                addDrawableChild(clickTypeBtn);
+                addScrolled(clickTypeBtn, y, 18);
                 y += 24;
 
                 // Condition
-                addDrawableChild(new TextWidget(cx - 150, y, 300, 10, Text.literal("§eCondition"), textRenderer));
+                addScrolled(new TextWidget(cx - 150, y, 300, 10, Text.literal("§eCondition"), textRenderer), y, 10);
                 conditionField = new TextFieldWidget(textRenderer, cx - 150, y + 12, 300, 18, Text.literal("Condition"));
                 conditionField.setMaxLength(128);
                 conditionField.setText(conditionText);
-                addDrawableChild(conditionField);
+                addScrolled(conditionField, y + 12, 18);
                 y += 34;
 
                 // Actions
-                addDrawableChild(new TextWidget(cx - 150, y, 300, 10, Text.literal("§eActions (Separate by semicolon ';')"), textRenderer));
+                addScrolled(new TextWidget(cx - 150, y, 300, 10, Text.literal("§eActions (Separate by semicolon ';')"), textRenderer), y, 10);
                 actionsField = new TextFieldWidget(textRenderer, cx - 150, y + 12, 300, 18, Text.literal("Actions"));
                 actionsField.setMaxLength(512);
                 actionsField.setText(actionsText);
-                addDrawableChild(actionsField);
+                addScrolled(actionsField, y + 12, 18);
+                y += 34;
+
+                int viewportHeight = scrollBottom() - scrollTop();
+                maxScrollY = Math.max(0, y - 48 - viewportHeight + 16);
+                if (scrollY > maxScrollY) scrollY = maxScrollY;
         }
 
         @Override
@@ -1384,7 +1424,25 @@ public class GuiApiModMenuEntry implements ModMenuApi {
             super.render(ctx, mouseX, mouseY, delta);
             ctx.drawCenteredTextWithShadow(textRenderer,
                     Text.literal("§6Edit Slot Properties"), width / 2, 8, 0xFFFFFF);
+            ctx.fill(width / 2 - 150, scrollTop() - 3, width / 2 + 150, scrollTop() - 2, 0x44FFFFFF);
             ctx.fill(width / 2 - 150, height - 32, width / 2 + 150, height - 31, 0x44FFFFFF);
+            if (maxScrollY > 0) {
+                int rx = width / 2 + 150;
+                int top = scrollTop();
+                int bottom = scrollBottom();
+                int trackHeight = bottom - top;
+                int thumbHeight = Math.max(16, (int)((double)trackHeight / (trackHeight + maxScrollY) * trackHeight));
+                int thumbY = top + (int)(scrollY / maxScrollY * (trackHeight - thumbHeight));
+                ctx.fill(rx + 6, top, rx + 10, bottom, 0x44FFFFFF);
+                ctx.fill(rx + 6, thumbY, rx + 10, thumbY + thumbHeight, 0xAAFFFFFF);
+            }
+        }
+
+        @Override
+        public boolean mouseScrolled(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
+            if (maxScrollY <= 0) return super.mouseScrolled(mouseX, mouseY, horizontalAmount, verticalAmount);
+            scrollBy(-verticalAmount * 28);
+            return true;
         }
 
         @Override
