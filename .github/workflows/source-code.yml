@@ -1,0 +1,38 @@
+name: Source Code (with Git History)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  archive:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout full repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Create source archive
+        run: |
+          mkdir archive
+
+          rsync -a \
+            --exclude archive \
+            --exclude .github \
+            ./ archive/
+
+          cp -r .git archive/
+
+      - name: Zip
+        run: |
+          zip -r source-with-history.zip archive
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: source-with-history
+          path: source-with-history.zip
