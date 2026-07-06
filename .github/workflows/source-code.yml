@@ -22,7 +22,7 @@ jobs:
         run: |
           mkdir archive
           sudo -i
-          chmod +x archive/.git/objects/pack/*
+          chmod 644 .git/objects/pack/*
           chmod +x archive/.git/objects/info/commit-graphs/commit-graph-chain
           
           rsync -a \
