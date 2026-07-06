@@ -22,11 +22,8 @@ jobs:
         run: |
           mkdir archive
           sudo -i
-          chmod +x archive/.git/objects/pack/pack-ee2d1d33865e318313f743d82e7f44e0fb3b8db5.pac
-          chnod +x archive/.git/objects/pack/pack-ee2d1d33865e318313f743d82e7f44e0fb3b8db5.idx
-          chmod +x archive/.git/objects/pack/pack-ee2d1d33865e318313f743d82e7f44e0fb3b8db5.rev
+          chmod +x archive/.git/objects/pack/pack-*.*
           chmod +x archive/.git/objects/info/commit-graphs/commit-graph-chain
-          chmod +x archive/.git/objects/info/commit-graphs/graph-365bd590154a4da12677540954e60b91a2be627d.graph
           
           rsync -a \
             --exclude archive \
