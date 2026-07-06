@@ -18,9 +18,11 @@ jobs:
 
       - name: Create source archive
         run: |
-         sudo -i
           mkdir archive
-
+          sudo -i
+          chmod +x .git/objects/pack/pack-*.pack
+          chmod +x archive/.git/objects/info/commit-graphs/commit-graph-chain
+          chmod +x archive/.git/objects/info/commit-graphs/graph-*.graph
           rsync -a \
             --exclude archive \
             --exclude .github \
