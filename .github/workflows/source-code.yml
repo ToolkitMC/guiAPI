@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   archive:
@@ -21,20 +21,22 @@ jobs:
       - name: Create source archive
         run: |
           mkdir archive
-          sudo -i
-          chmod 644 .git/objects/pack/*
-          chmod +x archive/.git/objects/info/commit-graphs/commit-graph-chain
-          
+
           rsync -a \
             --exclude archive \
             --exclude .github \
             ./ archive/
 
-          cp -r .git archive/
+          cp -a .git archive/
+
+          # İzinleri yalnızca varsa düzelt
+          find archive/.git -type d -exec chmod 755 {} +
+          find archive/.git -type f -exec chmod 644 {} +
 
       - name: Zip
         run: |
-          zip -r source-with-history.zip archive
+          cd archive
+          zip -r ../source-with-history.zip .
 
       - name: Upload artifact
         uses: actions/upload-artifact@v7
