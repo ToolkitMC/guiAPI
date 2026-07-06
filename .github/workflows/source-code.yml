@@ -20,7 +20,6 @@ jobs:
         run: |
           mkdir archive
           sudo -i
-          chmod +x .git/objects/pack/pack-*.pack
           chmod +x archive/.git/objects/info/commit-graphs/graph-*.graph
           rsync -a \
             --exclude archive \
