@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   archive:
@@ -19,21 +19,23 @@ jobs:
           fetch-depth: 0
 
       - name: Create source archive
+        shell: bash
         run: |
-          mkdir archive
+          set -euo pipefail
 
+          mkdir -p archive
+
+          # Proje dosyalarını .git hariç kopyala
           rsync -a \
-            --exclude archive \
-            --exclude .github \
+            --exclude=archive \
+            --exclude=.github \
+            --exclude=.git \
             ./ archive/
 
+          # Git geçmişini ayrı kopyala
           cp -a .git archive/
 
-          # İzinleri yalnızca varsa düzelt
-          find archive/.git -type d -exec chmod 755 {} +
-          find archive/.git -type f -exec chmod 644 {} +
-
-      - name: Zip
+      - name: Create ZIP
         run: |
           cd archive
           zip -r ../source-with-history.zip .
