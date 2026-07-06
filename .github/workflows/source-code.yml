@@ -1,6 +1,8 @@
 name: Source Code (with Git History)
 
 on:
+  push:
+  pull_request:
   workflow_dispatch:
 
 permissions:
@@ -17,20 +19,26 @@ jobs:
           fetch-depth: 0
 
       - name: Create source archive
+        shell: bash
         run: |
-          mkdir archive
-          sudo -i
-          chmod +x archive/.git/objects/info/commit-graphs/graph-*.graph
+          set -euo pipefail
+
+          mkdir -p archive
+
+          # Proje dosyalarını .git hariç kopyala
           rsync -a \
-            --exclude archive \
-            --exclude .github \
+            --exclude=archive \
+            --exclude=.github \
+            --exclude=.git \
             ./ archive/
 
-          cp -r .git archive/
+          # Git geçmişini ayrı kopyala
+          cp -a .git archive/
 
-      - name: Zip
+      - name: Create ZIP
         run: |
-          zip -r source-with-history.zip archive
+          cd archive
+          zip -r ../source-with-history.zip .
 
       - name: Upload artifact
         uses: actions/upload-artifact@v7
