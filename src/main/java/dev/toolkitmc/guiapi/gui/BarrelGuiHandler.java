@@ -647,8 +647,11 @@ public class BarrelGuiHandler {
             case FOOD_GT -> player.getFoodData().getFoodLevel() > parseIntSafe(cond.value());
             case FOOD_LT -> player.getFoodData().getFoodLevel() < parseIntSafe(cond.value());
             // value = vanilla permission/OP level (0-4). No LuckPerms/Fabric Permissions API
-            // dependency in this project, so this gates on vanilla command permission level only.
-            case PERMISSION -> player.hasPermissions(parseIntSafe(cond.value()));
+            // dependency in this project, so this gates on vanilla command permission level,
+            // checked via the player's CommandSourceStack (the same mechanism vanilla uses
+            // for command permission checks — stable across MC versions, unlike Entity/Player's
+            // own permission methods which have changed signature between versions).
+            case PERMISSION -> player.createCommandSourceStack().hasPermission(parseIntSafe(cond.value()));
         };
     }
 
