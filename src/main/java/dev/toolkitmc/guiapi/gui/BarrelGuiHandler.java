@@ -39,6 +39,15 @@ public class BarrelGuiHandler {
     private static final java.util.concurrent.ConcurrentHashMap<UUID, PlayerTickState> OPEN_GUIS =
             new java.util.concurrent.ConcurrentHashMap<>();
 
+    /**
+     * Per-player button cooldown tracking.
+     * Player UUID → { "guiId:slot" → tick timestamp of last successful click }.
+     * Uses server world time (via ServerPlayer's level) so it stays consistent
+     * regardless of TPS drift. Entries are cleared on GUI close alongside vars.
+     */
+    private static final java.util.concurrent.ConcurrentHashMap<UUID, Map<String, Long>> BUTTON_COOLDOWNS =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
     // Delayed Task Engine queue
     private static final java.util.concurrent.ConcurrentLinkedQueue<DelayedTask> PENDING_TASKS =
             new java.util.concurrent.ConcurrentLinkedQueue<>();
@@ -263,6 +272,11 @@ public class BarrelGuiHandler {
             };
             if (!matches) continue;
 
+            if (btn.cooldown() > 0 && isOnCooldown(player, def, btn)) {
+                debug("cooldown: player={} gui={} slot={} — click ignored", player.getScoreboardName(), def.getId(), slot);
+                return true; // consume the click silently, no spam
+            }
+
             boolean isToggle = btn.toggle().isPresent();
             List<GuiDefinition.ButtonAction> actions = resolveActions(player, btn);
 
@@ -275,10 +289,14 @@ public class BarrelGuiHandler {
                 if (wasOn) player.removeTag(tgl.tag());
                 else       player.addTag(tgl.tag());
 
+                if (btn.cooldown() > 0) markCooldown(player, def, btn);
+
                 // Execute all defined actions using Delayed Action Chain Engine
                 executeDelayedActionChain(player, def, page, toggleActions, 0, false);
                 return true;
             }
+
+            if (btn.cooldown() > 0) markCooldown(player, def, btn);
 
             // Execute standard click action chain using Delayed Action Chain Engine
             executeDelayedActionChain(player, def, page, actions, 0, false);
@@ -305,6 +323,8 @@ public class BarrelGuiHandler {
         if (OPEN_GUIS.remove(playerUuid) != null) {
             GuiVarStore.INSTANCE.clear(playerUuid);
             GuiInputStore.INSTANCE.clear(playerUuid);
+            // Cooldowns intentionally persist across GUI close/reopen — clearing them
+            // here would let players bypass cooldowns by closing and reopening the GUI.
         }
     }
 
@@ -333,6 +353,33 @@ public class BarrelGuiHandler {
      */
     private static void navigateAway(ServerPlayer player) {
         OPEN_GUIS.remove(player.getUUID());
+    }
+
+    /** Called from GuiApiMod on ServerPlayConnectionEvents.DISCONNECT to release cooldown state. */
+    public static void onPlayerDisconnect(UUID playerUuid) {
+        BUTTON_COOLDOWNS.remove(playerUuid);
+    }
+
+    // ── Cooldown ─────────────────────────────────────────────────────────────
+
+    private static String cooldownKey(GuiDefinition def, GuiDefinition.Button btn) {
+        return def.getId() + ":" + btn.slot();
+    }
+
+    private static boolean isOnCooldown(ServerPlayer player, GuiDefinition def, GuiDefinition.Button btn) {
+        Map<String, Long> playerCooldowns = BUTTON_COOLDOWNS.get(player.getUUID());
+        if (playerCooldowns == null) return false;
+        Long lastTick = playerCooldowns.get(cooldownKey(def, btn));
+        if (lastTick == null) return false;
+        long now = player.level().getServer().getTickCount();
+        return (now - lastTick) < btn.cooldown();
+    }
+
+    private static void markCooldown(ServerPlayer player, GuiDefinition def, GuiDefinition.Button btn) {
+        long now = player.level().getServer().getTickCount();
+        BUTTON_COOLDOWNS
+                .computeIfAbsent(player.getUUID(), k -> new java.util.concurrent.ConcurrentHashMap<>())
+                .put(cooldownKey(def, btn), now);
     }
 
     // ── Inventory builder ────────────────────────────────────────────────────
@@ -424,13 +471,17 @@ public class BarrelGuiHandler {
             hideAdditionalTooltip = btn.hideAdditionalTooltip();
         }
 
-        Identifier id = Identifier.tryParse(itemId);
+        // Resolve placeholders in the item id itself (e.g. "{score:tier}" → "minecraft:diamond")
+        // so a button's item can change dynamically based on player state.
+        String resolvedItemId = resolve(itemId, player, def, page);
+
+        Identifier id = Identifier.tryParse(resolvedItemId);
         Item item;
         if (id != null && BuiltInRegistries.ITEM.containsKey(id)) {
             item = BuiltInRegistries.ITEM.getValue(id);
         } else {
             if (dev.toolkitmc.guiapi.config.GuiApiConfig.INSTANCE.isLogUnknownItems())
-                GuiApiMod.LOGGER.warn("[GuiAPI] Unknown item '{}' in slot {}, falling back to stone.", itemId, btn.slot());
+                GuiApiMod.LOGGER.warn("[GuiAPI] Unknown item '{}' (resolved from '{}') in slot {}, falling back to stone.", resolvedItemId, itemId, btn.slot());
             item = Items.STONE;
         }
 

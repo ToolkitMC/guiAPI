@@ -205,7 +205,8 @@ public class GuiDefinition {
             Optional<String> itemModel,
             String amount,
             boolean hideTooltip,
-            boolean hideAdditionalTooltip
+            boolean hideAdditionalTooltip,
+            int cooldown
     ) {}
 
     // ── Fields ───────────────────────────────────────────────────────────────
@@ -378,12 +379,14 @@ public class GuiDefinition {
             condition = Optional.of(new ButtonCondition(ct, cv));
         }
 
+        int cooldown = b.has("cooldown") ? Math.max(0, b.get("cooldown").getAsInt()) : 0;
+
         // Toggle button — item/name/lore/actions come from the toggle definition
         if (b.has("toggle") && b.get("toggle").isJsonObject()) {
             ToggleDefinition toggle = parseToggle(b.getAsJsonObject("toggle"));
             return new Button(slot, page, "", "", List.of(), false,
                     clickType, condition, List.of(), Optional.of(toggle), Optional.empty(), Optional.empty(),
-                    "1", false, false);
+                    "1", false, false, cooldown);
         }
 
         // Standard button
@@ -416,7 +419,7 @@ public class GuiDefinition {
         boolean hideAdditionalTooltip = b.has("hide_additional_tooltip") && b.get("hide_additional_tooltip").getAsBoolean();
 
         return new Button(slot, page, item, name, lore, glint, clickType, condition, actions, Optional.empty(),
-                customModelData, itemModel, amount, hideTooltip, hideAdditionalTooltip);
+                customModelData, itemModel, amount, hideTooltip, hideAdditionalTooltip, cooldown);
     }
 
     private static Optional<CustomModelDataConfig> parseCustomModelData(JsonObject obj, String key) {
