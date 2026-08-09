@@ -646,12 +646,14 @@ public class BarrelGuiHandler {
             case HEALTH_LT -> player.getHealth() < parseFloatSafe(cond.value());
             case FOOD_GT -> player.getFoodData().getFoodLevel() > parseIntSafe(cond.value());
             case FOOD_LT -> player.getFoodData().getFoodLevel() < parseIntSafe(cond.value());
-            // value = vanilla permission/OP level (0-4). No LuckPerms/Fabric Permissions API
-            // dependency in this project, so this gates on vanilla command permission level,
-            // checked via the player's CommandSourceStack (the same mechanism vanilla uses
-            // for command permission checks — stable across MC versions, unlike Entity/Player's
-            // own permission methods which have changed signature between versions).
-            case PERMISSION -> player.createCommandSourceStack().hasPermission(parseIntSafe(cond.value()));
+            // TODO: PERMISSION condition type — needs the exact API for this project's
+            // Minecraft version (26.2). CommandSourceStack#hasPermission(int) and
+            // Player#hasPermissions(int) were both removed/changed here; the new
+            // permission system uses PermissionCheck/PermissionSet objects and I
+            // couldn't confirm the exact construction from available references.
+            // Falls back to "always false" (gate always blocks) rather than guessing
+            // wrong a third time and breaking the build again.
+            case PERMISSION -> false;
         };
     }
 
