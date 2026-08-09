@@ -22,7 +22,7 @@ cd guiAPI
 ./gradlew build
 ```
 
-The built jar is at `build/libs/guiapi-1.0.7.jar`.
+The built jar is at `build/libs/guiapi-1.0.6.jar`.
 
 To run in a local Minecraft instance, use Fabric's `runServer` task or drop the jar into a test server's `mods/` folder.
 
