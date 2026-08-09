@@ -8,7 +8,8 @@ import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.resource.ResourceManagerHelper;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
-import net.minecraft.resource.ResourceType;
+import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
+import net.minecraft.server.packs.PackType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -23,14 +24,19 @@ public class GuiApiMod implements ModInitializer {
 
         GuiApiConfig.INSTANCE.load();
 
-        ResourceManagerHelper.get(ResourceType.SERVER_DATA)
+        ResourceManagerHelper.get(PackType.SERVER_DATA)
                 .registerReloadListener(GuiRegistry.INSTANCE);
 
-        CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) ->
+        CommandRegistrationCallback.EVENT.register((dispatcher, context, selection) ->
                 GuiCommand.register(dispatcher));
 
         // Register Server Tick Event for Auto-Refreshing GUIs (tick_rate)
         ServerTickEvents.END_SERVER_TICK.register(BarrelGuiHandler::tick);
+
+        // Release per-player cooldown state on disconnect to avoid a slow memory leak
+        // for players who close the GUI without triggering the normal close-cleanup path.
+        ServerPlayConnectionEvents.DISCONNECT.register((handler, server) ->
+                BarrelGuiHandler.onPlayerDisconnect(handler.getPlayer().getUUID()));
 
         LOGGER.info("[GuiAPI] Ready.");
     }

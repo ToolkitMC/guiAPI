@@ -3,7 +3,7 @@
   "id": "guiapi",
   "version": "${version}",
   "name": "GUI API",
-  "description": "Datapack-driven chest GUI system for Minecraft 1.21.8.",
+  "description": "Datapack-driven chest GUI system for Minecraft 26.2.",
   "authors": [
     {
       "name": "ToolkitMC",
@@ -32,13 +32,17 @@
     ]
   },
   "mixins": [
-    "guiapi.mixins.json"
+    "guiapi.mixins.json",
+    {
+      "config": "guiapi.client.mixins.json",
+      "environment": "client"
+    }
   ],
   "depends": {
     "fabricloader": ">=${loader_version}",
     "fabric-api": "*",
     "minecraft": "~${minecraft_version}",
-    "java": ">=21"
+    "java": ">=25"
   },
   "suggests": {
     "modmenu": "*"

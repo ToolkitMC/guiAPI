@@ -1,14 +1,10 @@
 plugins {
-    id 'fabric-loom' version '1.11.8'
+    id 'net.fabricmc.fabric-loom' version "${loom_version}"
     id 'maven-publish'
 }
 
 version = project.mod_version
 group = project.maven_group
-
-base {
-    archivesName = project.archives_base_name
-}
 
 repositories {
     mavenLocal()
@@ -16,18 +12,34 @@ repositories {
     maven { url = "https://maven.fabricmc.net/" }
     maven { url = "https://api.modrinth.com/maven" }
     maven { url = "https://maven.shedaniel.me/" }
+    maven { url = "https://maven.terraformersmc.com/releases" }
+}
+
+loom {
+    splitEnvironmentSourceSets()
+
+    mods {
+        "guiapi" {
+            sourceSet sourceSets.main
+            sourceSet sourceSets.client
+        }
+    }
 }
 
 dependencies {
     minecraft "com.mojang:minecraft:${project.minecraft_version}"
-    mappings "net.fabricmc:yarn:${project.yarn_mappings}:v2"
-    modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
-    modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
+    // 26.2 is unobfuscated - no mappings line
+    implementation "net.fabricmc:fabric-loader:${project.loader_version}"
+    implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
 
     // Optional Mod Menu integration. The classes are compiled against Mod Menu,
     // but Mod Menu is only suggested at runtime in fabric.mod.json.
-    modCompileOnly "maven.modrinth:modmenu:${project.modmenu_version}"
-    modApi "me.shedaniel.cloth:cloth-config-fabric:19.0.147"
+    compileOnly "maven.modrinth:modmenu:${project.modmenu_version}"
+    // Cloth Config - keep as api so downstream mods can use it
+    api "me.shedaniel.cloth:cloth-config-fabric:${project.cloth_config_version}"
+
+    // ModMenu via terraformer maven as fallback (if modrinth fails)
+    // compileOnly "com.terraformersmc:modmenu:${project.modmenu_version}"
 
     testImplementation 'org.junit.jupiter:junit-jupiter-api:5.10.2'
     testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.10.2'
@@ -52,39 +64,26 @@ processResources {
 }
 
 tasks.withType(JavaCompile).configureEach {
-    options.release = 21
+    options.release = 25
 }
 
 java {
     withSourcesJar()
-    sourceCompatibility = JavaVersion.VERSION_21
-    targetCompatibility = JavaVersion.VERSION_21
+    sourceCompatibility = JavaVersion.VERSION_25
+    targetCompatibility = JavaVersion.VERSION_25
 }
 
 jar {
-    inputs.property "archivesName", project.base.archivesName
     from("LICENSE") {
-        rename { "${it}_${inputs.properties.archivesName}" }
+        rename { "${it}_${project.name}" }
     }
 }
 
 publishing {
     publications {
-        mavenJava(MavenPublication) {
-            groupId = project.maven_group
+        create("mavenJava", MavenPublication) {
             artifactId = project.archives_base_name
-            version = project.mod_version
-
-            artifact(remapJar) { builtBy remapJar }
-            artifact(remapSourcesJar) {
-                builtBy remapSourcesJar
-                classifier = 'sources'
-            }
-
-            pom {
-                name = project.archives_base_name
-                description = "guiAPI Fabric library"
-            }
+            from components.java
         }
     }
 

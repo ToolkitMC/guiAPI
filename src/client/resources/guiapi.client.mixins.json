@@ -2,10 +2,9 @@
   "required": true,
   "package": "dev.toolkitmc.guiapi.mixin",
   "compatibilityLevel": "JAVA_25",
-  "refmap": "guiapi.refmap.json",
-  "mixins": [
-  ],
+  "refmap": "guiapi.client.refmap.json",
   "client": [
+    "KeyboardMixin"
   ],
   "injectors": {
     "defaultRequire": 1

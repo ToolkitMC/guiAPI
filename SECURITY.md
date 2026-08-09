@@ -4,7 +4,7 @@
 
 | Version | Supported |
 |---------|-----------|
-| 1.0.x (Minecraft 1.21.1) | ✅ Active |
+| 1.0.x (Minecraft 1.21.1-26.2) | ✅ Active |
 
 Only the latest release receives security fixes.
 

@@ -6,11 +6,11 @@ import com.google.gson.JsonObject;
 import dev.toolkitmc.guiapi.GuiApiMod;
 import dev.toolkitmc.guiapi.gui.GuiDefinition;
 import net.fabricmc.fabric.api.resource.IdentifiableResourceReloadListener;
-import net.minecraft.resource.ResourceManager;
-import net.minecraft.resource.SinglePreparationResourceReloader;
+import net.minecraft.server.packs.resources.ResourceManager;
+import net.minecraft.server.packs.resources.SimplePreparableReloadListener;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.util.Identifier;
-import net.minecraft.util.profiler.Profiler;
+import net.minecraft.resources.Identifier;
+import net.minecraft.util.profiling.ProfilerFiller;
 
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
@@ -24,7 +24,7 @@ import java.util.Optional;
  * Registered as a server-side resource reload listener so it fires on
  * /reload as well as world load.
  */
-public class GuiRegistry extends SinglePreparationResourceReloader<Map<Identifier, GuiDefinition>>
+public class GuiRegistry extends SimplePreparableReloadListener<Map<Identifier, GuiDefinition>>
         implements IdentifiableResourceReloadListener {
 
     public static final GuiRegistry INSTANCE = new GuiRegistry();
@@ -41,19 +41,19 @@ public class GuiRegistry extends SinglePreparationResourceReloader<Map<Identifie
 
     @Override
     public Identifier getFabricId() {
-        return Identifier.of("guiapi", "gui_registry");
+        return Identifier.fromNamespaceAndPath("guiapi", "gui_registry");
     }
 
     // ── ResourceReloader impl ────────────────────────────────────────────────
 
     @Override
-    protected Map<Identifier, GuiDefinition> prepare(ResourceManager manager, Profiler profiler) {
+    protected Map<Identifier, GuiDefinition> prepare(ResourceManager manager, ProfilerFiller profiler) {
         Map<Identifier, GuiDefinition> loaded = new HashMap<>();
 
-        manager.findResources(DIRECTORY, id -> id.getPath().endsWith(".json"))
+        manager.listResources(DIRECTORY, id -> id.getPath().endsWith(".json"))
                .forEach((fileId, resource) -> {
                    try (InputStreamReader reader = new InputStreamReader(
-                           resource.getInputStream(), StandardCharsets.UTF_8)) {
+                           resource.open(), StandardCharsets.UTF_8)) {
 
                        JsonObject json = GSON.fromJson(reader, JsonObject.class);
 
@@ -65,7 +65,7 @@ public class GuiRegistry extends SinglePreparationResourceReloader<Map<Identifie
 
                        String path = fileId.getPath();
                        String stripped = path.substring(DIRECTORY.length() + 1, path.length() - 5);
-                       Identifier guiId = Identifier.of(fileId.getNamespace(), stripped);
+                       Identifier guiId = Identifier.fromNamespaceAndPath(fileId.getNamespace(), stripped);
 
                        GuiDefinition def = GuiDefinition.parse(guiId, json);
                        loaded.put(guiId, def);
@@ -80,7 +80,7 @@ public class GuiRegistry extends SinglePreparationResourceReloader<Map<Identifie
     }
 
     @Override
-    protected void apply(Map<Identifier, GuiDefinition> prepared, ResourceManager manager, Profiler profiler) {
+    protected void apply(Map<Identifier, GuiDefinition> prepared, ResourceManager manager, ProfilerFiller profiler) {
         definitions.clear();
         definitions.putAll(prepared);
         addonDefinitions.forEach(definitions::putIfAbsent);
@@ -107,7 +107,7 @@ public class GuiRegistry extends SinglePreparationResourceReloader<Map<Identifie
      */
     public boolean saveToDisk(MinecraftServer server, Identifier id, GuiDefinition def) {
         try {
-            java.nio.file.Path datapacksPath = server.getSavePath(net.minecraft.util.WorldSavePath.DATAPACKS);
+            java.nio.file.Path datapacksPath = server.getWorldPath(net.minecraft.world.level.storage.LevelResource.DATAPACK_DIR);
             if (!java.nio.file.Path.class.isInstance(datapacksPath) || !java.nio.file.Files.exists(datapacksPath)) return false;
 
             // Scan all loaded datapack subfolders

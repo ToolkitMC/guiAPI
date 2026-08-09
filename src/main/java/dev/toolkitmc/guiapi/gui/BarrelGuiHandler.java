@@ -1,29 +1,29 @@
 package dev.toolkitmc.guiapi.gui;
 
 import dev.toolkitmc.guiapi.GuiApiMod;
-import net.minecraft.component.DataComponentTypes;
-import net.minecraft.component.type.LoreComponent;
-import net.minecraft.component.type.NbtComponent;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.entity.player.PlayerInventory;
-import net.minecraft.inventory.Inventory;
-import net.minecraft.inventory.SimpleInventory;
-import net.minecraft.item.Item;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
-import net.minecraft.nbt.NbtCompound;
-import net.minecraft.registry.Registries;
-import net.minecraft.scoreboard.ScoreHolder;
-import net.minecraft.scoreboard.Scoreboard;
-import net.minecraft.scoreboard.ScoreboardObjective;
-import net.minecraft.screen.GenericContainerScreenHandler;
-import net.minecraft.screen.NamedScreenHandlerFactory;
-import net.minecraft.screen.ScreenHandlerType;
-import net.minecraft.screen.slot.SlotActionType;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.world.item.component.ItemLore;
+import net.minecraft.world.item.component.CustomData;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.Container;
+import net.minecraft.world.SimpleContainer;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.world.scores.ScoreHolder;
+import net.minecraft.world.scores.Scoreboard;
+import net.minecraft.world.scores.Objective;
+import net.minecraft.world.inventory.ChestMenu;
+import net.minecraft.world.MenuProvider;
+import net.minecraft.world.inventory.MenuType;
+import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.text.Text;
-import net.minecraft.util.Identifier;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
 
 import java.util.List;
 import java.util.Map;
@@ -39,6 +39,15 @@ public class BarrelGuiHandler {
     private static final java.util.concurrent.ConcurrentHashMap<UUID, PlayerTickState> OPEN_GUIS =
             new java.util.concurrent.ConcurrentHashMap<>();
 
+    /**
+     * Per-player button cooldown tracking.
+     * Player UUID → { "guiId:slot" → tick timestamp of last successful click }.
+     * Uses server world time (via ServerPlayer's level) so it stays consistent
+     * regardless of TPS drift. Entries are cleared on GUI close alongside vars.
+     */
+    private static final java.util.concurrent.ConcurrentHashMap<UUID, Map<String, Long>> BUTTON_COOLDOWNS =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
     // Delayed Task Engine queue
     private static final java.util.concurrent.ConcurrentLinkedQueue<DelayedTask> PENDING_TASKS =
             new java.util.concurrent.ConcurrentLinkedQueue<>();
@@ -51,7 +60,7 @@ public class BarrelGuiHandler {
         final double openY;
         final double openZ;
 
-        PlayerTickState(GuiDefinition def, int page, ServerPlayerEntity player) {
+        PlayerTickState(GuiDefinition def, int page, ServerPlayer player) {
             this.def = def;
             this.page = page;
             this.ticksElapsed = 0;
@@ -81,38 +90,38 @@ public class BarrelGuiHandler {
 
     // ── Public API ───────────────────────────────────────────────────────────
 
-    public static void open(ServerPlayerEntity player, GuiDefinition def) {
+    public static void open(ServerPlayer player, GuiDefinition def) {
         open(player, def, 0);
     }
 
 
-    private static SimpleInventory populateChestMinecart(ServerPlayerEntity player, GuiDefinition def, int page, net.minecraft.entity.vehicle.ChestMinecartEntity cart) {
-        SimpleInventory inv = buildInventory(player, def, page, 27);
+    private static SimpleContainer populateChestMinecart(ServerPlayer player, GuiDefinition def, int page, net.minecraft.world.entity.vehicle.minecart.MinecartChest cart) {
+        SimpleContainer inv = buildInventory(player, def, page, 27);
         for (int i = 0; i < 27; i++) {
-            cart.setStack(i, inv.getStack(i));
+            cart.setItem(i, inv.getItem(i));
         }
         return inv;
     }
 
-    public static void open(ServerPlayerEntity player, GuiDefinition def, int page) {
+    public static void open(ServerPlayer player, GuiDefinition def, int page) {
         page = Math.clamp(page, 0, def.getPageCount() - 1);
         int rows = Math.clamp(def.getRows(), 1, 6);
         int finalPage = page;
 
         // Register state BEFORE building inventory so that any handleClick call
         // triggered during screen open (edge case) already sees the correct state.
-        OPEN_GUIS.put(player.getUuid(), new PlayerTickState(def, page, player));
-        debug("open: player={} gui={} page={}", player.getNameForScoreboard(), def.getId(), page);
+        OPEN_GUIS.put(player.getUUID(), new PlayerTickState(def, page, player));
+        debug("open: player={} gui={} page={}", player.getScoreboardName(), def.getId(), page);
 
-        SimpleInventory inv;
+        SimpleContainer inv;
         int finalRows = rows;
         if (def.getContainerType() == GuiDefinition.ContainerType.CHEST_MINECART) {
             finalRows = 3;
-            net.minecraft.server.world.ServerWorld world = (net.minecraft.server.world.ServerWorld) player.getWorld();
-            List<net.minecraft.entity.vehicle.ChestMinecartEntity> minecarts = world.getEntitiesByClass(
-                net.minecraft.entity.vehicle.ChestMinecartEntity.class,
-                player.getBoundingBox().expand(8.0),
-                cart -> cart.getCommandTags().contains("MyGUI")
+            net.minecraft.server.level.ServerLevel world = (net.minecraft.server.level.ServerLevel) player.level();
+            List<net.minecraft.world.entity.vehicle.minecart.MinecartChest> minecarts = world.getEntitiesOfClass(
+                net.minecraft.world.entity.vehicle.minecart.MinecartChest.class,
+                player.getBoundingBox().inflate(8.0),
+                cart -> cart.entityTags().contains("MyGUI")
             );
             if (!minecarts.isEmpty()) {
                 inv = populateChestMinecart(player, def, page, minecarts.get(0));
@@ -132,15 +141,15 @@ public class BarrelGuiHandler {
         String resolvedTitle = resolve(def.getTitle(), player, def, page);
         final int openRows = finalRows;
 
-        player.openHandledScreen(new NamedScreenHandlerFactory() {
+        player.openMenu(new MenuProvider() {
             @Override
-            public Text getDisplayName() {
-                return Text.literal(resolvedTitle);
+            public Component getDisplayName() {
+                return Component.literal(resolvedTitle);
             }
 
             @Override
-            public net.minecraft.screen.ScreenHandler createMenu(
-                    int syncId, PlayerInventory playerInv, PlayerEntity p) {
+            public net.minecraft.world.inventory.AbstractContainerMenu createMenu(
+                    int syncId, Inventory playerInv, Player p) {
                 return new GuiScreenHandler(rowsToType(openRows), syncId, playerInv, inv, openRows, def, finalPage);
             }
         });
@@ -154,7 +163,7 @@ public class BarrelGuiHandler {
         for (Map.Entry<UUID, PlayerTickState> entry : OPEN_GUIS.entrySet()) {
             UUID uuid = entry.getKey();
             PlayerTickState state = entry.getValue();
-            ServerPlayerEntity player = server.getPlayerManager().getPlayer(uuid);
+            ServerPlayer player = server.getPlayerList().getPlayer(uuid);
 
             if (player == null) {
                 OPEN_GUIS.remove(uuid);
@@ -168,8 +177,8 @@ public class BarrelGuiHandler {
                 double dz = player.getZ() - state.openZ;
                 double distSq = dx * dx + dy * dy + dz * dz;
                 if (distSq > 2.25) { // 1.5 blocks distance squared = 2.25
-                    player.closeHandledScreen();
-                    player.sendMessage(Text.literal("§cGUI closed due to movement!"), true);
+                    player.closeContainer();
+                    player.sendSystemMessage(Component.literal("§cGUI closed due to movement!"), true);
                     continue;
                 }
             }
@@ -189,7 +198,7 @@ public class BarrelGuiHandler {
             DelayedTask task = PENDING_TASKS.poll();
             if (task == null) break;
 
-            ServerPlayerEntity player = server.getPlayerManager().getPlayer(task.playerUuid);
+            ServerPlayer player = server.getPlayerList().getPlayer(task.playerUuid);
             if (player == null) continue; // Player went offline, drop task
 
             int remaining = task.ticksRemaining - 1;
@@ -203,24 +212,24 @@ public class BarrelGuiHandler {
         }
     }
 
-    public static void refreshCurrentGui(ServerPlayerEntity player) {
-        if (player.currentScreenHandler instanceof GuiScreenHandler guiHandler) {
+    public static void refreshCurrentGui(ServerPlayer player) {
+        if (player.containerMenu instanceof GuiScreenHandler guiHandler) {
             GuiDefinition def = guiHandler.getDefinition();
             int page = guiHandler.getPage();
-            int rows = guiHandler.getRows();
+            int rows = guiHandler.getRowCount();
             int size = rows * 9;
-            Inventory inv = guiHandler.getInventory();
+            Container inv = guiHandler.getContainer();
 
             // Clear inventory first
             for (int slot = 0; slot < size; slot++) {
-                inv.setStack(slot, ItemStack.EMPTY);
+                inv.setItem(slot, ItemStack.EMPTY);
             }
 
             // Populate according to page buttons and conditions
             for (GuiDefinition.Button btn : def.getButtonsForPage(page)) {
                 if (btn.slot() < 0 || btn.slot() >= size) continue;
                 if (!evaluateCondition(player, btn)) continue;
-                inv.setStack(btn.slot(), buildStack(player, def, page, btn));
+                inv.setItem(btn.slot(), buildStack(player, def, page, btn));
             }
 
             // Apply background filler for empty slots
@@ -228,24 +237,24 @@ public class BarrelGuiHandler {
                 GuiDefinition.FillerConfig fill = def.getFiller().get();
                 ItemStack fillStack = buildFillerStack(fill);
                 for (int slot = 0; slot < size; slot++) {
-                    if (inv.getStack(slot).isEmpty()) {
-                        inv.setStack(slot, fillStack.copy());
+                    if (inv.getItem(slot).isEmpty()) {
+                        inv.setItem(slot, fillStack.copy());
                     }
                 }
             }
 
             // Send content updates to client
-            guiHandler.sendContentUpdates();
-            debug("refreshCurrentGui: player={} gui={} page={}", player.getNameForScoreboard(), def.getId(), page);
+            guiHandler.broadcastChanges();
+            debug("refreshCurrentGui: player={} gui={} page={}", player.getScoreboardName(), def.getId(), page);
         }
     }
 
-    public static boolean handleClick(ServerPlayerEntity player, GuiDefinition def,
-                                      int page, int slot, int mouseButton, SlotActionType actionType) {
+    public static boolean handleClick(ServerPlayer player, GuiDefinition def,
+                                      int page, int slot, int mouseButton, ContainerInput actionType) {
         // mouseButton: 0 = left, 1 = right (Minecraft protocol)
-        final boolean isShift = actionType == SlotActionType.QUICK_MOVE;
-        final boolean isLeft  = !isShift && mouseButton == 0 && actionType == SlotActionType.PICKUP;
-        final boolean isRight = !isShift && mouseButton == 1 && actionType == SlotActionType.PICKUP;
+        final boolean isShift = actionType == ContainerInput.QUICK_MOVE;
+        final boolean isLeft  = !isShift && mouseButton == 0 && actionType == ContainerInput.PICKUP;
+        final boolean isRight = !isShift && mouseButton == 1 && actionType == ContainerInput.PICKUP;
 
         // Consume every action type to block item manipulation.
         if (!isLeft && !isRight && !isShift) return true;
@@ -263,6 +272,11 @@ public class BarrelGuiHandler {
             };
             if (!matches) continue;
 
+            if (btn.cooldown() > 0 && isOnCooldown(player, def, btn)) {
+                debug("cooldown: player={} gui={} slot={} — click ignored", player.getScoreboardName(), def.getId(), slot);
+                return true; // consume the click silently, no spam
+            }
+
             boolean isToggle = btn.toggle().isPresent();
             List<GuiDefinition.ButtonAction> actions = resolveActions(player, btn);
 
@@ -271,14 +285,18 @@ public class BarrelGuiHandler {
                 List<GuiDefinition.ButtonAction> toggleActions = resolveActions(player, btn);
 
                 // Flip tag synchronously via Java API
-                boolean wasOn = player.getCommandTags().contains(tgl.tag());
-                if (wasOn) player.removeCommandTag(tgl.tag());
-                else       player.addCommandTag(tgl.tag());
+                boolean wasOn = player.entityTags().contains(tgl.tag());
+                if (wasOn) player.removeTag(tgl.tag());
+                else       player.addTag(tgl.tag());
+
+                if (btn.cooldown() > 0) markCooldown(player, def, btn);
 
                 // Execute all defined actions using Delayed Action Chain Engine
                 executeDelayedActionChain(player, def, page, toggleActions, 0, false);
                 return true;
             }
+
+            if (btn.cooldown() > 0) markCooldown(player, def, btn);
 
             // Execute standard click action chain using Delayed Action Chain Engine
             executeDelayedActionChain(player, def, page, actions, 0, false);
@@ -287,13 +305,13 @@ public class BarrelGuiHandler {
         return true;
     }
 
-    public static void executeDelayedActionChain(ServerPlayerEntity player, GuiDefinition def, int page, List<GuiDefinition.ButtonAction> actions, int startIndex, boolean ignoreFirstDelay) {
+    public static void executeDelayedActionChain(ServerPlayer player, GuiDefinition def, int page, List<GuiDefinition.ButtonAction> actions, int startIndex, boolean ignoreFirstDelay) {
         for (int i = startIndex; i < actions.size(); i++) {
             GuiDefinition.ButtonAction action = actions.get(i);
             boolean checkDelay = (i > startIndex) || !ignoreFirstDelay;
             if (checkDelay && action.delay() > 0 && dev.toolkitmc.guiapi.config.GuiApiConfig.INSTANCE.isAllowDelayedActions()) {
                 // Schedule remaining actions starting from this delayed one!
-                PENDING_TASKS.add(new DelayedTask(player.getUuid(), actions, i, action.delay(), def, page));
+                PENDING_TASKS.add(new DelayedTask(player.getUUID(), actions, i, action.delay(), def, page));
                 break;
             }
             boolean shouldBreak = executeAction(player, def, page, action);
@@ -305,6 +323,8 @@ public class BarrelGuiHandler {
         if (OPEN_GUIS.remove(playerUuid) != null) {
             GuiVarStore.INSTANCE.clear(playerUuid);
             GuiInputStore.INSTANCE.clear(playerUuid);
+            // Cooldowns intentionally persist across GUI close/reopen — clearing them
+            // here would let players bypass cooldowns by closing and reopening the GUI.
         }
     }
 
@@ -312,41 +332,68 @@ public class BarrelGuiHandler {
      * Called when the player genuinely closes the GUI (ESC, etc.).
      * Fires on_close actions and clears runtime variables.
      */
-    public static void onClose(ServerPlayerEntity player) {
-        PlayerTickState state = OPEN_GUIS.remove(player.getUuid());
+    public static void onClose(ServerPlayer player) {
+        PlayerTickState state = OPEN_GUIS.remove(player.getUUID());
         if (state == null) return;
-        debug("close: player={} gui={}", player.getNameForScoreboard(), state.def.getId());
+        debug("close: player={} gui={}", player.getScoreboardName(), state.def.getId());
         if (dev.toolkitmc.guiapi.config.GuiApiConfig.INSTANCE.isEnableCloseSound()) {
             float closeVolume = 0.5f * (dev.toolkitmc.guiapi.config.GuiApiConfig.INSTANCE.getSoundVolume() / 100.0f);
-            player.playSoundToPlayer(net.minecraft.sound.SoundEvents.BLOCK_CHEST_CLOSE, net.minecraft.sound.SoundCategory.BLOCKS, closeVolume, 1.0f);
+            player.level().playSound(null, player.getX(), player.getY(), player.getZ(), net.minecraft.sounds.SoundEvents.CHEST_CLOSE, net.minecraft.sounds.SoundSource.BLOCKS, closeVolume, 1.0f);
         }
         for (GuiDefinition.ButtonAction action : state.def.getOnClose()) {
             executeAction(player, state.def, state.page, action);
         }
-        GuiVarStore.INSTANCE.clear(player.getUuid());
-        GuiInputStore.INSTANCE.clear(player.getUuid());
+        GuiVarStore.INSTANCE.clear(player.getUUID());
+        GuiInputStore.INSTANCE.clear(player.getUUID());
     }
 
     /**
      * Called internally before navigating to another GUI or page.
      * Removes open state WITHOUT clearing runtime variables.
      */
-    private static void navigateAway(ServerPlayerEntity player) {
-        OPEN_GUIS.remove(player.getUuid());
+    private static void navigateAway(ServerPlayer player) {
+        OPEN_GUIS.remove(player.getUUID());
+    }
+
+    /** Called from GuiApiMod on ServerPlayConnectionEvents.DISCONNECT to release cooldown state. */
+    public static void onPlayerDisconnect(UUID playerUuid) {
+        BUTTON_COOLDOWNS.remove(playerUuid);
+    }
+
+    // ── Cooldown ─────────────────────────────────────────────────────────────
+
+    private static String cooldownKey(GuiDefinition def, GuiDefinition.Button btn) {
+        return def.getId() + ":" + btn.slot();
+    }
+
+    private static boolean isOnCooldown(ServerPlayer player, GuiDefinition def, GuiDefinition.Button btn) {
+        Map<String, Long> playerCooldowns = BUTTON_COOLDOWNS.get(player.getUUID());
+        if (playerCooldowns == null) return false;
+        Long lastTick = playerCooldowns.get(cooldownKey(def, btn));
+        if (lastTick == null) return false;
+        long now = player.level().getServer().getTickCount();
+        return (now - lastTick) < btn.cooldown();
+    }
+
+    private static void markCooldown(ServerPlayer player, GuiDefinition def, GuiDefinition.Button btn) {
+        long now = player.level().getServer().getTickCount();
+        BUTTON_COOLDOWNS
+                .computeIfAbsent(player.getUUID(), k -> new java.util.concurrent.ConcurrentHashMap<>())
+                .put(cooldownKey(def, btn), now);
     }
 
     // ── Inventory builder ────────────────────────────────────────────────────
 
-    private static SimpleInventory buildInventory(ServerPlayerEntity player,
+    private static SimpleContainer buildInventory(ServerPlayer player,
                                                   GuiDefinition def, int page, int size) {
-        SimpleInventory inv = new SimpleInventory(size) {
-            @Override public boolean canPlayerUse(PlayerEntity p) { return true; }
+        SimpleContainer inv = new SimpleContainer(size) {
+            @Override public boolean stillValid(Player p) { return true; }
         };
 
         for (GuiDefinition.Button btn : def.getButtonsForPage(page)) {
             if (btn.slot() < 0 || btn.slot() >= size) continue;
             if (!evaluateCondition(player, btn)) continue;
-            inv.setStack(btn.slot(), buildStack(player, def, page, btn));
+            inv.setItem(btn.slot(), buildStack(player, def, page, btn));
         }
 
         // Apply background filler for empty slots
@@ -354,8 +401,8 @@ public class BarrelGuiHandler {
             GuiDefinition.FillerConfig fill = def.getFiller().get();
             ItemStack fillStack = buildFillerStack(fill);
             for (int slot = 0; slot < size; slot++) {
-                if (inv.getStack(slot).isEmpty()) {
-                    inv.setStack(slot, fillStack.copy());
+                if (inv.getItem(slot).isEmpty()) {
+                    inv.setItem(slot, fillStack.copy());
                 }
             }
         }
@@ -366,28 +413,28 @@ public class BarrelGuiHandler {
     private static ItemStack buildFillerStack(GuiDefinition.FillerConfig fill) {
         Identifier id = Identifier.tryParse(fill.item());
         Item item = Items.STONE;
-        if (id != null && Registries.ITEM.containsId(id)) {
-            item = Registries.ITEM.get(id);
+        if (id != null && BuiltInRegistries.ITEM.containsKey(id)) {
+            item = BuiltInRegistries.ITEM.getValue(id);
         }
         ItemStack stack = new ItemStack(item);
         if (!fill.name().isEmpty()) {
-            stack.set(DataComponentTypes.CUSTOM_NAME,
-                    Text.literal(fill.name()).styled(s -> s.withItalic(false)));
+            stack.set(DataComponents.CUSTOM_NAME,
+                    Component.literal(fill.name()).withStyle(s -> s.withItalic(false)));
         }
         if (fill.glint() && dev.toolkitmc.guiapi.config.GuiApiConfig.INSTANCE.isEnableButtonGlint()) {
-            stack.set(DataComponentTypes.ENCHANTMENT_GLINT_OVERRIDE, true);
+            stack.set(DataComponents.ENCHANTMENT_GLINT_OVERRIDE, true);
         }
-        stack.set(DataComponentTypes.CUSTOM_DATA, NbtComponent.of(new NbtCompound()));
+        stack.set(DataComponents.CUSTOM_DATA, CustomData.of(new CompoundTag()));
         if (fill.hideTooltip()) {
             // Pristine fix: Match Java 21 SequencedSet for empty list
-            net.minecraft.component.type.TooltipDisplayComponent tooltipDisplay =
-                    new net.minecraft.component.type.TooltipDisplayComponent(false, new java.util.LinkedHashSet<>());
-            stack.set(DataComponentTypes.TOOLTIP_DISPLAY, tooltipDisplay);
+            net.minecraft.world.item.component.TooltipDisplay tooltipDisplay =
+                    new net.minecraft.world.item.component.TooltipDisplay(false, new java.util.LinkedHashSet<>());
+            stack.set(DataComponents.TOOLTIP_DISPLAY, tooltipDisplay);
         }
         return stack;
     }
 
-    private static ItemStack buildStack(ServerPlayerEntity player,
+    private static ItemStack buildStack(ServerPlayer player,
                                         GuiDefinition def, int page,
                                         GuiDefinition.Button btn) {
         final String  itemId;
@@ -402,7 +449,7 @@ public class BarrelGuiHandler {
 
         if (btn.toggle().isPresent()) {
             GuiDefinition.ToggleDefinition tgl = btn.toggle().get();
-            boolean on = player.getCommandTags().contains(tgl.tag());
+            boolean on = player.entityTags().contains(tgl.tag());
             itemId = on ? tgl.itemOn()  : tgl.itemOff();
             name   = on ? tgl.nameOn()  : tgl.nameOff();
             lore   = on ? tgl.loreOn()  : tgl.loreOff();
@@ -424,13 +471,17 @@ public class BarrelGuiHandler {
             hideAdditionalTooltip = btn.hideAdditionalTooltip();
         }
 
-        Identifier id = Identifier.tryParse(itemId);
+        // Resolve placeholders in the item id itself (e.g. "{score:tier}" → "minecraft:diamond")
+        // so a button's item can change dynamically based on player state.
+        String resolvedItemId = resolve(itemId, player, def, page);
+
+        Identifier id = Identifier.tryParse(resolvedItemId);
         Item item;
-        if (id != null && Registries.ITEM.containsId(id)) {
-            item = Registries.ITEM.get(id);
+        if (id != null && BuiltInRegistries.ITEM.containsKey(id)) {
+            item = BuiltInRegistries.ITEM.getValue(id);
         } else {
             if (dev.toolkitmc.guiapi.config.GuiApiConfig.INSTANCE.isLogUnknownItems())
-                GuiApiMod.LOGGER.warn("[GuiAPI] Unknown item '{}' in slot {}, falling back to stone.", itemId, btn.slot());
+                GuiApiMod.LOGGER.warn("[GuiAPI] Unknown item '{}' (resolved from '{}') in slot {}, falling back to stone.", resolvedItemId, itemId, btn.slot());
             item = Items.STONE;
         }
 
@@ -445,64 +496,64 @@ public class BarrelGuiHandler {
 
         String resolvedName = resolve(name, player, def, page);
         if (!resolvedName.isEmpty()) {
-            stack.set(DataComponentTypes.CUSTOM_NAME,
-                    Text.literal(resolvedName).styled(s -> s.withItalic(false)));
+            stack.set(DataComponents.CUSTOM_NAME,
+                    Component.literal(resolvedName).withStyle(s -> s.withItalic(false)));
         }
 
-        List<Text> loreTexts = new java.util.ArrayList<>();
+        List<Component> loreTexts = new java.util.ArrayList<>();
         if (!lore.isEmpty()) {
             for (String l : lore) {
-                loreTexts.add(Text.literal(resolve(l, player, def, page)).styled(s -> s.withItalic(false)));
+                loreTexts.add(Component.literal(resolve(l, player, def, page)).withStyle(s -> s.withItalic(false)));
             }
         }
         if (dev.toolkitmc.guiapi.config.GuiApiConfig.INSTANCE.isShowItemIdsDeveloper()) {
-            loreTexts.add(Text.literal("§8ID: " + net.minecraft.registry.Registries.ITEM.getId(item)).styled(s -> s.withItalic(false)));
+            loreTexts.add(Component.literal("§8ID: " + net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(item)).withStyle(s -> s.withItalic(false)));
         }
         if (!loreTexts.isEmpty()) {
-            stack.set(DataComponentTypes.LORE, new LoreComponent(loreTexts));
+            stack.set(DataComponents.LORE, new ItemLore(loreTexts));
         }
 
-        if (glint && dev.toolkitmc.guiapi.config.GuiApiConfig.INSTANCE.isEnableButtonGlint()) stack.set(DataComponentTypes.ENCHANTMENT_GLINT_OVERRIDE, true);
+        if (glint && dev.toolkitmc.guiapi.config.GuiApiConfig.INSTANCE.isEnableButtonGlint()) stack.set(DataComponents.ENCHANTMENT_GLINT_OVERRIDE, true);
 
         // Mark as GUI item to block extraction
-        stack.set(DataComponentTypes.CUSTOM_DATA, NbtComponent.of(new NbtCompound()));
+        stack.set(DataComponents.CUSTOM_DATA, CustomData.of(new CompoundTag()));
 
         // --- Custom Model Data ---
         if (customModelData.isPresent()) {
             GuiDefinition.CustomModelDataConfig cmd = customModelData.get();
-            net.minecraft.component.type.CustomModelDataComponent component =
-                    new net.minecraft.component.type.CustomModelDataComponent(
+            net.minecraft.world.item.component.CustomModelData component =
+                    new net.minecraft.world.item.component.CustomModelData(
                             cmd.floats(), cmd.flags(), cmd.strings(), cmd.colors()
                     );
-            stack.set(DataComponentTypes.CUSTOM_MODEL_DATA, component);
+            stack.set(DataComponents.CUSTOM_MODEL_DATA, component);
         }
 
         // --- Item Model ---
         if (itemModel.isPresent()) {
             Identifier modelId = Identifier.tryParse(itemModel.get());
             if (modelId != null) {
-                stack.set(DataComponentTypes.ITEM_MODEL, modelId);
+                stack.set(DataComponents.ITEM_MODEL, modelId);
             }
         }
 
         // --- Tooltip Control (1.21.4+ TOOLTIP_DISPLAY Component) ---
         if (hideTooltip) {
             // Pristine fix: Match Java 21 SequencedSet for empty list
-            net.minecraft.component.type.TooltipDisplayComponent tooltipDisplay =
-                    new net.minecraft.component.type.TooltipDisplayComponent(false, new java.util.LinkedHashSet<>());
-            stack.set(DataComponentTypes.TOOLTIP_DISPLAY, tooltipDisplay);
+            net.minecraft.world.item.component.TooltipDisplay tooltipDisplay =
+                    new net.minecraft.world.item.component.TooltipDisplay(false, new java.util.LinkedHashSet<>());
+            stack.set(DataComponents.TOOLTIP_DISPLAY, tooltipDisplay);
         } else if (hideAdditionalTooltip) {
             // Pristine fix: Match Java 21 SequencedSet constructor parameter
-            net.minecraft.component.type.TooltipDisplayComponent tooltipDisplay =
-                    new net.minecraft.component.type.TooltipDisplayComponent(true, new java.util.LinkedHashSet<>(java.util.List.of(
-                            DataComponentTypes.ATTRIBUTE_MODIFIERS,
-                            DataComponentTypes.ENCHANTMENTS,
-                            DataComponentTypes.STORED_ENCHANTMENTS,
-                            DataComponentTypes.DYED_COLOR,
-                            DataComponentTypes.POTION_CONTENTS,
-                            DataComponentTypes.UNBREAKABLE
+            net.minecraft.world.item.component.TooltipDisplay tooltipDisplay =
+                    new net.minecraft.world.item.component.TooltipDisplay(true, new java.util.LinkedHashSet<>(java.util.List.of(
+                            DataComponents.ATTRIBUTE_MODIFIERS,
+                            DataComponents.ENCHANTMENTS,
+                            DataComponents.STORED_ENCHANTMENTS,
+                            DataComponents.DYED_COLOR,
+                            DataComponents.POTION_CONTENTS,
+                            DataComponents.UNBREAKABLE
                     )));
-            stack.set(DataComponentTypes.TOOLTIP_DISPLAY, tooltipDisplay);
+            stack.set(DataComponents.TOOLTIP_DISPLAY, tooltipDisplay);
         }
 
         return stack;
@@ -510,7 +561,7 @@ public class BarrelGuiHandler {
 
     // ── Placeholder resolution ────────────────────────────────────────────────
 
-    static String resolve(String text, ServerPlayerEntity player,
+    static String resolve(String text, ServerPlayer player,
                           GuiDefinition def, int page) {
         if (text == null || text.isEmpty() || !text.contains("{")) return text;
 
@@ -520,7 +571,7 @@ public class BarrelGuiHandler {
         text = text.replace("{page1}",  String.valueOf(page + 1));
         text = text.replace("{pages}",  String.valueOf(def.getPageCount()));
         text = text.replace("{xp}",     String.valueOf(player.experienceLevel));
-        text = text.replace("{input}",  GuiInputStore.INSTANCE.get(player.getUuid()));
+        text = text.replace("{input}",  GuiInputStore.INSTANCE.get(player.getUUID()));
 
         // {score:objective}
         int idx;
@@ -537,7 +588,7 @@ public class BarrelGuiHandler {
             int end = text.indexOf('}', idx);
             if (end < 0) break;
             String key = text.substring(idx + 5, end);
-            String val = GuiVarStore.INSTANCE.getOrDefault(player.getUuid(), key, "");
+            String val = GuiVarStore.INSTANCE.getOrDefault(player.getUUID(), key, "");
             text = text.substring(0, idx) + val + text.substring(end + 1);
         }
 
@@ -547,13 +598,13 @@ public class BarrelGuiHandler {
 
     // ── Condition evaluation ─────────────────────────────────────────────────
 
-    static boolean evaluateCondition(ServerPlayerEntity player, GuiDefinition.Button btn) {
+    static boolean evaluateCondition(ServerPlayer player, GuiDefinition.Button btn) {
         if (btn.condition().isEmpty()) return true;
 
         GuiDefinition.ButtonCondition cond = btn.condition().get();
         return switch (cond.type()) {
-            case HAS_TAG  -> player.getCommandTags().contains(cond.value());
-            case NOT_TAG  -> !player.getCommandTags().contains(cond.value());
+            case HAS_TAG  -> player.entityTags().contains(cond.value());
+            case NOT_TAG  -> !player.entityTags().contains(cond.value());
             case SCORE_GT -> getScore(player, cond.value().split(":", 2), 0) >
                              parseCondInt(cond.value().split(":", 2), 1);
             case SCORE_LT -> getScore(player, cond.value().split(":", 2), 0) <
@@ -564,19 +615,19 @@ public class BarrelGuiHandler {
             case VAR_EQ   -> {
                 String[] p = cond.value().split(":", 2);
                 yield p.length == 2 && GuiVarStore.INSTANCE
-                        .getOrDefault(player.getUuid(), p[0], "").equals(p[1]);
+                        .getOrDefault(player.getUUID(), p[0], "").equals(p[1]);
             }
             case VAR_GT   -> {
                 String[] p = cond.value().split(":", 2);
                 yield p.length == 2 && GuiVarStore.INSTANCE
-                        .getInt(player.getUuid(), p[0]) > parseIntSafe(p[1]);
+                        .getInt(player.getUUID(), p[0]) > parseIntSafe(p[1]);
             }
             case VAR_LT   -> {
                 String[] p = cond.value().split(":", 2);
                 yield p.length == 2 && GuiVarStore.INSTANCE
-                        .getInt(player.getUuid(), p[0]) < parseIntSafe(p[1]);
+                        .getInt(player.getUUID(), p[0]) < parseIntSafe(p[1]);
             }
-            case VAR_SET  -> GuiVarStore.INSTANCE.get(player.getUuid(), cond.value()) != null;
+            case VAR_SET  -> GuiVarStore.INSTANCE.get(player.getUUID(), cond.value()) != null;
             case HAS_ITEM -> {
                 String[] parts = cond.value().split(":", 2);
                 String itemId = parts[0];
@@ -593,48 +644,48 @@ public class BarrelGuiHandler {
             case LEVEL_LT -> player.experienceLevel < parseIntSafe(cond.value());
             case HEALTH_GT -> player.getHealth() > parseFloatSafe(cond.value());
             case HEALTH_LT -> player.getHealth() < parseFloatSafe(cond.value());
-            case FOOD_GT -> player.getHungerManager().getFoodLevel() > parseIntSafe(cond.value());
-            case FOOD_LT -> player.getHungerManager().getFoodLevel() < parseIntSafe(cond.value());
+            case FOOD_GT -> player.getFoodData().getFoodLevel() > parseIntSafe(cond.value());
+            case FOOD_LT -> player.getFoodData().getFoodLevel() < parseIntSafe(cond.value());
         };
     }
 
-    private static boolean hasItemCount(ServerPlayerEntity player, String itemId, int requiredAmount) {
+    private static boolean hasItemCount(ServerPlayer player, String itemId, int requiredAmount) {
         Identifier id = Identifier.tryParse(itemId);
-        if (id == null || !Registries.ITEM.containsId(id)) return false;
-        Item targetItem = Registries.ITEM.get(id);
+        if (id == null || !BuiltInRegistries.ITEM.containsKey(id)) return false;
+        Item targetItem = BuiltInRegistries.ITEM.getValue(id);
 
         int count = 0;
-        for (int i = 0; i < player.getInventory().size(); i++) {
-            ItemStack stack = player.getInventory().getStack(i);
-            if (!stack.isEmpty() && stack.isOf(targetItem)) {
+        for (int i = 0; i < player.getInventory().getContainerSize(); i++) {
+            ItemStack stack = player.getInventory().getItem(i);
+            if (!stack.isEmpty() && stack.is(targetItem)) {
                 count += stack.getCount();
             }
         }
         return count >= requiredAmount;
     }
 
-    private static void takeItemCount(ServerPlayerEntity player, String itemId, int amountToTake) {
+    private static void takeItemCount(ServerPlayer player, String itemId, int amountToTake) {
         Identifier id = Identifier.tryParse(itemId);
-        if (id == null || !Registries.ITEM.containsId(id)) return;
-        Item targetItem = Registries.ITEM.get(id);
+        if (id == null || !BuiltInRegistries.ITEM.containsKey(id)) return;
+        Item targetItem = BuiltInRegistries.ITEM.getValue(id);
 
         int remaining = amountToTake;
-        for (int i = 0; i < player.getInventory().size(); i++) {
-            ItemStack stack = player.getInventory().getStack(i);
-            if (!stack.isEmpty() && stack.isOf(targetItem)) {
+        for (int i = 0; i < player.getInventory().getContainerSize(); i++) {
+            ItemStack stack = player.getInventory().getItem(i);
+            if (!stack.isEmpty() && stack.is(targetItem)) {
                 int count = stack.getCount();
                 if (count <= remaining) {
-                    player.getInventory().setStack(i, ItemStack.EMPTY);
+                    player.getInventory().setItem(i, ItemStack.EMPTY);
                     remaining -= count;
                 } else {
-                    stack.decrement(remaining);
+                    stack.shrink(remaining);
                     remaining = 0;
                 }
                 if (remaining <= 0) break;
             }
         }
         // Sync player inventory with client
-        player.currentScreenHandler.sendContentUpdates();
+        player.containerMenu.broadcastChanges();
     }
 
     private static int parseIntSafe(String s) {
@@ -648,10 +699,10 @@ public class BarrelGuiHandler {
     // ── Toggle action resolution ─────────────────────────────────────────────
 
     private static List<GuiDefinition.ButtonAction> resolveActions(
-            ServerPlayerEntity player, GuiDefinition.Button btn) {
+            ServerPlayer player, GuiDefinition.Button btn) {
         if (btn.toggle().isPresent()) {
             GuiDefinition.ToggleDefinition tgl = btn.toggle().get();
-            boolean on = player.getCommandTags().contains(tgl.tag());
+            boolean on = player.entityTags().contains(tgl.tag());
             return on ? tgl.actionsOn() : tgl.actionsOff();
         }
         return btn.actions();
@@ -659,11 +710,11 @@ public class BarrelGuiHandler {
 
     // ── Action execution ─────────────────────────────────────────────────────
 
-    static boolean executeAction(ServerPlayerEntity player, GuiDefinition def,
+    static boolean executeAction(ServerPlayer player, GuiDefinition def,
                                  int currentPage, GuiDefinition.ButtonAction action) {
-        MinecraftServer server = player.getServer();
+        MinecraftServer server = player.level().getServer();
         debug("action: player={} type={} value=\"{}\"",
-                player.getNameForScoreboard(), action.type(), action.value());
+                player.getScoreboardName(), action.type(), action.value());
         switch (action.type()) {
             case RUN_COMMAND -> {
                 String cmd = action.value().startsWith("/")
@@ -671,7 +722,7 @@ public class BarrelGuiHandler {
                 cmd = resolve(cmd, player, def, currentPage);
                 // Auditing executed command logs if enabled globally in config
                 if (dev.toolkitmc.guiapi.config.GuiApiConfig.INSTANCE.isLogCommands()) {
-                    GuiApiMod.LOGGER.info("[GuiAPI|CommandLog] Player {} executed command: {}", player.getNameForScoreboard(), cmd);
+                    GuiApiMod.LOGGER.info("[GuiAPI|CommandLog] Player {} executed command: {}", player.getScoreboardName(), cmd);
                 }
                 if (action.runWith() == GuiDefinition.RunWith.CONSOLE) {
                     if (!dev.toolkitmc.guiapi.config.GuiApiConfig.INSTANCE.isAllowConsoleRunWith()) {
@@ -680,9 +731,9 @@ public class BarrelGuiHandler {
                         }
                         break;
                     }
-                    server.getCommandManager().executeWithPrefix(server.getCommandSource(), cmd);
+                    server.getCommands().performPrefixedCommand(server.createCommandSourceStack(), cmd);
                 } else {
-                    server.getCommandManager().executeWithPrefix(player.getCommandSource(), cmd);
+                    server.getCommands().performPrefixedCommand(player.createCommandSourceStack(), cmd);
                 }
             }
             case NONE -> {
@@ -705,8 +756,8 @@ public class BarrelGuiHandler {
                 final int previousPage = currentPage;
 
                 AnvilGuiHandler.openInput(player, anvilTitle, defaultText, (sp, text) -> {
-                    GuiVarStore.INSTANCE.set(sp.getUuid(), varKey, text);
-                    GuiInputStore.INSTANCE.set(sp.getUuid(), text);
+                    GuiVarStore.INSTANCE.set(sp.getUUID(), varKey, text);
+                    GuiInputStore.INSTANCE.set(sp.getUUID(), text);
                     dev.toolkitmc.guiapi.loader.GuiRegistry.INSTANCE.get(previousGuiId)
                             .ifPresent(target -> open(sp, target, previousPage));
                 });
@@ -719,20 +770,20 @@ public class BarrelGuiHandler {
                 }
             }
             case CLOSE -> {
-                player.closeHandledScreen();
+                player.closeContainer();
                 return true;
             }
             case OPEN_GUI -> {
                 navigateAway(player);
-                player.closeHandledScreen();
+                player.closeContainer();
                 Identifier targetId = Identifier.tryParse(action.value());
                 if (targetId != null) {
                     dev.toolkitmc.guiapi.loader.GuiRegistry.INSTANCE
                             .get(targetId)
                             .ifPresentOrElse(
                                     target -> open(player, target),
-                                    () -> player.sendMessage(
-                                            Text.literal("[GuiAPI] GUI not found: " + targetId), false));
+                                    () -> player.sendSystemMessage(
+                                            Component.literal("[GuiAPI] GUI not found: " + targetId), false));
                 }
                 return true;
             }
@@ -740,16 +791,16 @@ public class BarrelGuiHandler {
                 String msgVal = resolve(action.value(), player, def, currentPage);
                 String mode = dev.toolkitmc.guiapi.config.GuiApiConfig.INSTANCE.getCommandExecuteMode();
                 if ("CHAT".equalsIgnoreCase(mode)) {
-                    player.sendMessage(Text.literal(msgVal), false);
+                    player.sendSystemMessage(Component.literal(msgVal), false);
                 } else if ("SYSTEM".equalsIgnoreCase(mode)) {
-                    player.sendMessage(Text.literal(msgVal), true);
+                    player.sendSystemMessage(Component.literal(msgVal), true);
                 }
             }
             case NEXT_PAGE -> {
                 int next = currentPage + 1;
                 if (next < def.getPageCount()) {
                     navigateAway(player);
-                    player.closeHandledScreen();
+                    player.closeContainer();
                     open(player, def, next);
                 }
                 return true;
@@ -758,7 +809,7 @@ public class BarrelGuiHandler {
                 int prev = currentPage - 1;
                 if (prev >= 0) {
                     navigateAway(player);
-                    player.closeHandledScreen();
+                    player.closeContainer();
                     open(player, def, prev);
                 }
                 return true;
@@ -781,12 +832,12 @@ public class BarrelGuiHandler {
                 }
                 Identifier soundIdent = Identifier.tryParse(soundId);
                 if (soundIdent != null) {
-                    net.minecraft.sound.SoundEvent soundEvent =
-                            Registries.SOUND_EVENT.get(soundIdent);
+                    net.minecraft.sounds.SoundEvent soundEvent =
+                            BuiltInRegistries.SOUND_EVENT.getValue(soundIdent);
                     if (soundEvent != null) {
                         float finalVolume = volume * (dev.toolkitmc.guiapi.config.GuiApiConfig.INSTANCE.getSoundVolume() / 100.0f);
-                        player.playSoundToPlayer(soundEvent,
-                                net.minecraft.sound.SoundCategory.PLAYERS, finalVolume, pitch);
+                        player.level().playSound(null, player.getX(), player.getY(), player.getZ(), soundEvent,
+                                net.minecraft.sounds.SoundSource.PLAYERS, finalVolume, pitch);
                     } else {
                         if (dev.toolkitmc.guiapi.config.GuiApiConfig.INSTANCE.isLogUnknownSounds())
                             GuiApiMod.LOGGER.warn("[GuiAPI] Unknown sound '{}' in sound action.", soundId);
@@ -798,7 +849,7 @@ public class BarrelGuiHandler {
                     int target = Integer.parseInt(action.value());
                     if (target >= 0 && target < def.getPageCount()) {
                         navigateAway(player);
-                        player.closeHandledScreen();
+                        player.closeContainer();
                         open(player, def, target);
                     }
                 } catch (NumberFormatException ignored) {}
@@ -807,14 +858,14 @@ public class BarrelGuiHandler {
             case SET_VAR -> {
                 if (!action.var().isEmpty()) {
                     String resolved = resolve(action.value(), player, def, currentPage);
-                    GuiVarStore.INSTANCE.set(player.getUuid(), action.var(), resolved);
+                    GuiVarStore.INSTANCE.set(player.getUUID(), action.var(), resolved);
                 }
             }
             case ADD_VAR -> {
                 if (!action.var().isEmpty()) {
                     try {
                         int delta = Integer.parseInt(resolve(action.value(), player, def, currentPage));
-                        GuiVarStore.INSTANCE.add(player.getUuid(), action.var(), delta);
+                        GuiVarStore.INSTANCE.add(player.getUUID(), action.var(), delta);
                     } catch (NumberFormatException ignored) {}
                 }
             }
@@ -822,16 +873,16 @@ public class BarrelGuiHandler {
                 if (!action.var().isEmpty()) {
                     try {
                         int delta = Integer.parseInt(resolve(action.value(), player, def, currentPage));
-                        GuiVarStore.INSTANCE.add(player.getUuid(), action.var(), -delta);
+                        GuiVarStore.INSTANCE.add(player.getUUID(), action.var(), -delta);
                     } catch (NumberFormatException ignored) {}
                 }
             }
             case RESET_VAR -> {
                 if (!action.var().isEmpty()) {
-                    GuiVarStore.INSTANCE.remove(player.getUuid(), action.var());
+                    GuiVarStore.INSTANCE.remove(player.getUUID(), action.var());
                 }
             }
-            case CLEAR_VARS -> GuiVarStore.INSTANCE.clear(player.getUuid());
+            case CLEAR_VARS -> GuiVarStore.INSTANCE.clear(player.getUUID());
             case REFRESH -> refreshCurrentGui(player);
             case TAKE_ITEM -> {
                 String[] parts = action.value().split(":", 2);
@@ -874,7 +925,7 @@ public class BarrelGuiHandler {
             }
             case ACTION_BAR -> {
                 String resolved = resolve(action.value(), player, def, currentPage);
-                player.sendMessage(Text.literal(resolved), true);
+                player.sendSystemMessage(Component.literal(resolved), true);
             }
             case ADD_EFFECT -> {
                 if (!dev.toolkitmc.guiapi.config.GuiApiConfig.INSTANCE.isAllowStatusEffects()) {
@@ -912,11 +963,11 @@ public class BarrelGuiHandler {
                         boolean particles = parts.length <= (durationIdx + 2) || Boolean.parseBoolean(parts[durationIdx + 2]);
 
                         Identifier effIdent = Identifier.tryParse(effectId);
-                        if (effIdent != null && Registries.STATUS_EFFECT.containsId(effIdent)) {
-                            net.minecraft.entity.effect.StatusEffect effect = Registries.STATUS_EFFECT.get(effIdent);
-                            if (effect != null) {
-                                player.addStatusEffect(new net.minecraft.entity.effect.StatusEffectInstance(
-                                        Registries.STATUS_EFFECT.getEntry(effect), durationSecs * 20, amp, false, particles, particles
+                        if (effIdent != null && BuiltInRegistries.MOB_EFFECT.containsKey(effIdent)) {
+                            var holderOpt = BuiltInRegistries.MOB_EFFECT.get(effIdent);
+                            if (holderOpt.isPresent()) {
+                                player.addEffect(new net.minecraft.world.effect.MobEffectInstance(
+                                        holderOpt.get(), durationSecs * 20, amp, false, particles, particles
                                 ));
                             }
                         }
@@ -932,10 +983,10 @@ public class BarrelGuiHandler {
                 }
                 String resolved = resolve(action.value(), player, def, currentPage);
                 Identifier effIdent = Identifier.tryParse(resolved);
-                if (effIdent != null && Registries.STATUS_EFFECT.containsId(effIdent)) {
-                    net.minecraft.entity.effect.StatusEffect effect = Registries.STATUS_EFFECT.get(effIdent);
-                    if (effect != null) {
-                        player.removeStatusEffect(Registries.STATUS_EFFECT.getEntry(effect));
+                if (effIdent != null && BuiltInRegistries.MOB_EFFECT.containsKey(effIdent)) {
+                    var holderOpt2 = BuiltInRegistries.MOB_EFFECT.get(effIdent);
+                    if (holderOpt2.isPresent()) {
+                        player.removeEffect(holderOpt2.get());
                     }
                 }
             }
@@ -946,7 +997,7 @@ public class BarrelGuiHandler {
                     }
                     break;
                 }
-                player.clearStatusEffects();
+                player.removeAllEffects();
             }
         }
         return false;
@@ -954,38 +1005,38 @@ public class BarrelGuiHandler {
 
     // ── Score helpers ─────────────────────────────────────────────────────────
 
-    private static void modifyScore(ServerPlayerEntity player, String objectiveName, int val, ScoreModType modType) {
+    private static void modifyScore(ServerPlayer player, String objectiveName, int val, ScoreModType modType) {
         try {
-            Scoreboard sb = player.getServer().getScoreboard();
-            ScoreboardObjective obj = sb.getNullableObjective(objectiveName);
+            Scoreboard sb = player.level().getServer().getScoreboard();
+            Objective obj = sb.getObjective(objectiveName);
             if (obj == null) return;
-            net.minecraft.scoreboard.ScoreAccess score = sb.getOrCreateScore(ScoreHolder.fromName(player.getNameForScoreboard()), obj);
+            net.minecraft.world.scores.ScoreAccess score = sb.getOrCreatePlayerScore(ScoreHolder.forNameOnly(player.getScoreboardName()), obj);
             if (score != null) {
-                int current = score.getScore();
+                int current = score.get();
                 int target = switch (modType) {
                     case SET -> val;
                     case ADD -> current + val;
                     case SUB -> current - val;
                 };
-                score.setScore(target);
+                score.set(target);
             }
         } catch (Exception e) {
-            GuiApiMod.LOGGER.error("[GuiAPI] Failed to modify score for player {}", player.getNameForScoreboard(), e);
+            GuiApiMod.LOGGER.error("[GuiAPI] Failed to modify score for player {}", player.getScoreboardName(), e);
         }
     }
 
-    private static int getScore(ServerPlayerEntity player, String[] parts, int objIndex) {
+    private static int getScore(ServerPlayer player, String[] parts, int objIndex) {
         if (parts.length <= objIndex) return 0;
         return getScore(player, parts[objIndex]);
     }
 
-    private static int getScore(ServerPlayerEntity player, String objective) {
+    private static int getScore(ServerPlayer player, String objective) {
         try {
-            Scoreboard sb = player.getServer().getScoreboard();
-            ScoreboardObjective obj = sb.getNullableObjective(objective);
+            Scoreboard sb = player.level().getServer().getScoreboard();
+            Objective obj = sb.getObjective(objective);
             if (obj == null) return 0;
-            var score = sb.getScore(ScoreHolder.fromName(player.getNameForScoreboard()), obj);
-            return score != null ? score.getScore() : 0;
+            var info = sb.getPlayerScoreInfo(ScoreHolder.forNameOnly(player.getScoreboardName()), obj);
+            return info != null ? info.value() : 0;
         } catch (Exception e) {
             return 0;
         }
@@ -999,14 +1050,14 @@ public class BarrelGuiHandler {
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
-    private static ScreenHandlerType<GenericContainerScreenHandler> rowsToType(int rows) {
+    private static MenuType<ChestMenu> rowsToType(int rows) {
         return switch (rows) {
-            case 1 -> ScreenHandlerType.GENERIC_9X1;
-            case 2 -> ScreenHandlerType.GENERIC_9X2;
-            case 3 -> ScreenHandlerType.GENERIC_9X3;
-            case 4 -> ScreenHandlerType.GENERIC_9X4;
-            case 5 -> ScreenHandlerType.GENERIC_9X5;
-            default -> ScreenHandlerType.GENERIC_9X6;
+            case 1 -> MenuType.GENERIC_9x1;
+            case 2 -> MenuType.GENERIC_9x2;
+            case 3 -> MenuType.GENERIC_9x3;
+            case 4 -> MenuType.GENERIC_9x4;
+            case 5 -> MenuType.GENERIC_9x5;
+            default -> MenuType.GENERIC_9x6;
         };
     }
 }

@@ -1,23 +1,23 @@
 package dev.toolkitmc.guiapi.gui;
 
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.entity.player.PlayerInventory;
-import net.minecraft.inventory.Inventory;
-import net.minecraft.item.ItemStack;
-import net.minecraft.screen.GenericContainerScreenHandler;
-import net.minecraft.screen.ScreenHandlerType;
-import net.minecraft.screen.slot.SlotActionType;
-import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.Container;
+import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.inventory.ChestMenu;
+import net.minecraft.world.inventory.ContainerInput;
+import net.minecraft.world.inventory.MenuType;
+import net.minecraft.world.item.ItemStack;
 
-public class GuiScreenHandler extends GenericContainerScreenHandler {
+public class GuiScreenHandler extends ChestMenu {
 
     private final GuiDefinition definition;
     private final int page;
 
-    public GuiScreenHandler(ScreenHandlerType<?> type, int syncId,
-                            PlayerInventory playerInv, Inventory inv,
+    public GuiScreenHandler(MenuType<?> type, int syncId,
+                            Inventory playerInv, Container container,
                             int rows, GuiDefinition definition, int page) {
-        super(type, syncId, playerInv, inv, rows);
+        super(type, syncId, playerInv, container, rows);
         this.definition = definition;
         this.page = page;
     }
@@ -31,36 +31,34 @@ public class GuiScreenHandler extends GenericContainerScreenHandler {
     }
 
     @Override
-    public void onSlotClick(int slotIndex, int button, SlotActionType actionType, PlayerEntity player) {
-        // `getRows()` is from GenericContainerScreenHandler — always matches
-        // the actual inventory size, regardless of what GuiDefinition.getRows() returns.
-        int guiSlotCount = getRows() * 9;
-        if (slotIndex >= 0 && slotIndex < guiSlotCount) {
-            if (player instanceof ServerPlayerEntity sp) {
-                BarrelGuiHandler.handleClick(sp, definition, page, slotIndex, button, actionType);
+    public void clicked(int slotId, int button, ContainerInput input, Player player) {
+        int guiSlotCount = getRowCount() * 9;
+        if (slotId >= 0 && slotId < guiSlotCount) {
+            if (player instanceof ServerPlayer sp) {
+                BarrelGuiHandler.handleClick(sp, definition, page, slotId, button, input);
             }
             return; // consume; don't call super
         }
-        // Block player-inventory clicks (slotIndex >= guiSlotCount) as well — no super call.
+        // Block player-inventory clicks as well — no super call.
     }
 
     @Override
-    public ItemStack quickMove(PlayerEntity player, int slot) {
+    public ItemStack quickMoveStack(Player player, int index) {
         return ItemStack.EMPTY;
     }
 
     @Override
-    public boolean canUse(PlayerEntity player) {
+    public boolean stillValid(Player player) {
         return true;
     }
 
     @Override
-    public void onClosed(PlayerEntity player) {
-        super.onClosed(player);
-        if (player instanceof ServerPlayerEntity sp) {
-            BarrelGuiHandler.onClose(sp); // fires on_close actions
+    public void removed(Player player) {
+        super.removed(player);
+        if (player instanceof ServerPlayer sp) {
+            BarrelGuiHandler.onClose(sp);
         } else {
-            BarrelGuiHandler.onClose(player.getUuid());
+            BarrelGuiHandler.onClose(player.getUUID());
         }
     }
 }
