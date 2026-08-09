@@ -7,13 +7,15 @@ import dev.toolkitmc.guiapi.gui.BarrelGuiHandler;
 import dev.toolkitmc.guiapi.gui.GuiDefinition;
 import dev.toolkitmc.guiapi.gui.GuiVarStore;
 import dev.toolkitmc.guiapi.loader.GuiRegistry;
-import net.minecraft.command.argument.EntityArgumentType;
-import net.minecraft.command.argument.IdentifierArgumentType;
-import net.minecraft.server.command.CommandManager;
-import net.minecraft.server.command.ServerCommandSource;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.text.Text;
-import net.minecraft.util.Identifier;
+import net.minecraft.commands.CommandSourceStack;
+import net.minecraft.commands.Commands;
+import net.minecraft.commands.arguments.EntityArgument;
+import net.minecraft.commands.arguments.IdentifierArgument;
+import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.permissions.Permission;
+import net.minecraft.server.permissions.PermissionLevel;
 
 import java.util.Collection;
 import java.util.List;
@@ -25,19 +27,19 @@ import java.util.Map;
  * /guiapi reload
  * /guiapi help
  *
- * Permission level 2 required.
+ * Permission level 2 (GAMEMASTERS) required.
  */
 public class GuiCommand {
 
-    public static void register(CommandDispatcher<ServerCommandSource> dispatcher) {
+    public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         dispatcher.register(
-            CommandManager.literal("guiapi")
-                .requires(src -> src.hasPermissionLevel(
-                        dev.toolkitmc.guiapi.config.GuiApiConfig.INSTANCE.getPermissionLevel()))
+            Commands.literal("guiapi")
+                .requires(src -> src.permissions().hasPermission(new Permission.HasCommandLevel(PermissionLevel.byId(
+                        dev.toolkitmc.guiapi.config.GuiApiConfig.INSTANCE.getPermissionLevel()))))
                 .executes(GuiCommand::showHelp)
 
-                .then(CommandManager.literal("open")
-                    .then(CommandManager.argument("id", IdentifierArgumentType.identifier())
+                .then(Commands.literal("open")
+                    .then(Commands.argument("id", IdentifierArgument.id())
                         .suggests((ctx, builder) -> {
                             String input = builder.getRemainingLowerCase();
                             GuiRegistry.INSTANCE.getAll().keySet().stream()
@@ -48,42 +50,42 @@ public class GuiCommand {
                         })
 
                         .executes(ctx -> {
-                            ServerPlayerEntity player = ctx.getSource().getPlayer();
+                            ServerPlayer player = ctx.getSource().getPlayer();
                             if (player == null) {
-                                ctx.getSource().sendError(
-                                    Text.literal("[GuiAPI] Must be a player, or specify <targets>."));
+                                ctx.getSource().sendFailure(
+                                    Component.literal("[GuiAPI] Must be a player, or specify <targets>."));
                                 return 0;
                             }
                             return openGui(ctx, List.of(player));
                         })
 
-                        .then(CommandManager.argument("targets", EntityArgumentType.players())
+                        .then(Commands.argument("targets", EntityArgument.players())
                             .executes(ctx -> openGui(ctx,
-                                    EntityArgumentType.getPlayers(ctx, "targets"))))
+                                    EntityArgument.getPlayers(ctx, "targets"))))
                     )
                 )
 
-                .then(CommandManager.literal("list")
+                .then(Commands.literal("list")
                     .executes(GuiCommand::listGuis))
 
-                .then(CommandManager.literal("reload")
+                .then(Commands.literal("reload")
                     .executes(GuiCommand::reloadGuis))
 
-                .then(CommandManager.literal("help")
+                .then(Commands.literal("help")
                     .executes(GuiCommand::showHelp))
 
-                .then(CommandManager.literal("var")
-                    .then(CommandManager.literal("get")
-                        .then(CommandManager.argument("target", EntityArgumentType.player())
-                            .then(CommandManager.argument("key", StringArgumentType.word())
+                .then(Commands.literal("var")
+                    .then(Commands.literal("get")
+                        .then(Commands.argument("target", EntityArgument.player())
+                            .then(Commands.argument("key", StringArgumentType.word())
                                 .executes(GuiCommand::varGet))))
-                    .then(CommandManager.literal("set")
-                        .then(CommandManager.argument("target", EntityArgumentType.player())
-                            .then(CommandManager.argument("key", StringArgumentType.word())
-                                .then(CommandManager.argument("value", StringArgumentType.greedyString())
+                    .then(Commands.literal("set")
+                        .then(Commands.argument("target", EntityArgument.player())
+                            .then(Commands.argument("key", StringArgumentType.word())
+                                .then(Commands.argument("value", StringArgumentType.greedyString())
                                     .executes(GuiCommand::varSet)))))
-                    .then(CommandManager.literal("clear")
-                        .then(CommandManager.argument("target", EntityArgumentType.player())
+                    .then(Commands.literal("clear")
+                        .then(Commands.argument("target", EntityArgument.player())
                             .executes(GuiCommand::varClear)))
                 )
         );
@@ -91,30 +93,30 @@ public class GuiCommand {
 
     // ── Subcommand handlers ──────────────────────────────────────────────────
 
-    private static int openGui(CommandContext<ServerCommandSource> ctx,
-                               Collection<ServerPlayerEntity> targets) {
-        Identifier id = IdentifierArgumentType.getIdentifier(ctx, "id");
+    private static int openGui(CommandContext<CommandSourceStack> ctx,
+                               Collection<ServerPlayer> targets) {
+        Identifier id = IdentifierArgument.getId(ctx, "id");
 
         GuiDefinition def = GuiRegistry.INSTANCE.get(id).orElse(null);
         if (def == null) {
-            ctx.getSource().sendError(Text.literal("[GuiAPI] GUI not found: " + id));
+            ctx.getSource().sendFailure(Component.literal("[GuiAPI] GUI not found: " + id));
             return 0;
         }
 
-        for (ServerPlayerEntity player : targets) {
+        for (ServerPlayer player : targets) {
             BarrelGuiHandler.open(player, def);
         }
 
-        ctx.getSource().sendFeedback(
-                () -> Text.literal("[GuiAPI] Opened '" + id + "' for " + targets.size() + " player(s)."),
+        ctx.getSource().sendSuccess(
+                () -> Component.literal("[GuiAPI] Opened '" + id + "' for " + targets.size() + " player(s)."),
                 false);
         return targets.size();
     }
 
-    private static int listGuis(CommandContext<ServerCommandSource> ctx) {
+    private static int listGuis(CommandContext<CommandSourceStack> ctx) {
         var all = GuiRegistry.INSTANCE.getAll();
         if (all.isEmpty()) {
-            ctx.getSource().sendFeedback(() -> Text.literal("[GuiAPI] No GUIs loaded."), false);
+            ctx.getSource().sendSuccess(() -> Component.literal("[GuiAPI] No GUIs loaded."), false);
             return 0;
         }
         StringBuilder sb = new StringBuilder("[GuiAPI] Loaded GUIs (" + all.size() + "):\n");
@@ -122,60 +124,60 @@ public class GuiCommand {
                 sb.append("  ").append(id)
                   .append(" [rows=").append(def.getRows())
                   .append(", pages=").append(def.getPageCount()).append("]\n"));
-        ctx.getSource().sendFeedback(() -> Text.literal(sb.toString().trim()), false);
+        ctx.getSource().sendSuccess(() -> Component.literal(sb.toString().trim()), false);
         return all.size();
     }
 
-    private static int reloadGuis(CommandContext<ServerCommandSource> ctx) {
+    private static int reloadGuis(CommandContext<CommandSourceStack> ctx) {
         ctx.getSource().getServer()
-                .reloadResources(ctx.getSource().getServer().getDataPackManager().getEnabledIds())
-                .thenRun(() -> ctx.getSource().sendFeedback(
-                        () -> Text.literal("[GuiAPI] Reload complete. " +
+                .reloadResources(ctx.getSource().getServer().getPackRepository().getSelectedIds())
+                .thenRun(() -> ctx.getSource().sendSuccess(
+                        () -> Component.literal("[GuiAPI] Reload complete. " +
                                 GuiRegistry.INSTANCE.getAll().size() + " GUI(s) loaded."),
                         true))
                 .exceptionally(ex -> {
-                    ctx.getSource().sendError(
-                            Text.literal("[GuiAPI] Reload failed: " + ex.getMessage()));
+                    ctx.getSource().sendFailure(
+                            Component.literal("[GuiAPI] Reload failed: " + ex.getMessage()));
                     return null;
                 });
         return 1;
     }
 
-    private static int varGet(CommandContext<ServerCommandSource> ctx) throws com.mojang.brigadier.exceptions.CommandSyntaxException {
-        ServerPlayerEntity target = EntityArgumentType.getPlayer(ctx, "target");
+    private static int varGet(CommandContext<CommandSourceStack> ctx) throws com.mojang.brigadier.exceptions.CommandSyntaxException {
+        ServerPlayer target = EntityArgument.getPlayer(ctx, "target");
         String key = StringArgumentType.getString(ctx, "key");
-        String val = GuiVarStore.INSTANCE.get(target.getUuid(), key);
+        String val = GuiVarStore.INSTANCE.get(target.getUUID(), key);
         if (val == null) {
-            ctx.getSource().sendFeedback(
-                    () -> Text.literal("[GuiAPI] " + target.getName().getString() + "." + key + " is not set."), false);
+            ctx.getSource().sendSuccess(
+                    () -> Component.literal("[GuiAPI] " + target.getName().getString() + "." + key + " is not set."), false);
         } else {
-            ctx.getSource().sendFeedback(
-                    () -> Text.literal("[GuiAPI] " + target.getName().getString() + "." + key + " = " + val), false);
+            ctx.getSource().sendSuccess(
+                    () -> Component.literal("[GuiAPI] " + target.getName().getString() + "." + key + " = " + val), false);
         }
         return val != null ? 1 : 0;
     }
 
-    private static int varSet(CommandContext<ServerCommandSource> ctx) throws com.mojang.brigadier.exceptions.CommandSyntaxException {
-        ServerPlayerEntity target = EntityArgumentType.getPlayer(ctx, "target");
+    private static int varSet(CommandContext<CommandSourceStack> ctx) throws com.mojang.brigadier.exceptions.CommandSyntaxException {
+        ServerPlayer target = EntityArgument.getPlayer(ctx, "target");
         String key   = StringArgumentType.getString(ctx, "key");
         String value = StringArgumentType.getString(ctx, "value");
-        GuiVarStore.INSTANCE.set(target.getUuid(), key, value);
-        ctx.getSource().sendFeedback(
-                () -> Text.literal("[GuiAPI] Set " + target.getName().getString() + "." + key + " = " + value), false);
+        GuiVarStore.INSTANCE.set(target.getUUID(), key, value);
+        ctx.getSource().sendSuccess(
+                () -> Component.literal("[GuiAPI] Set " + target.getName().getString() + "." + key + " = " + value), false);
         return 1;
     }
 
-    private static int varClear(CommandContext<ServerCommandSource> ctx) throws com.mojang.brigadier.exceptions.CommandSyntaxException {
-        ServerPlayerEntity target = EntityArgumentType.getPlayer(ctx, "target");
-        Map<String, String> vars = GuiVarStore.INSTANCE.getAll(target.getUuid());
+    private static int varClear(CommandContext<CommandSourceStack> ctx) throws com.mojang.brigadier.exceptions.CommandSyntaxException {
+        ServerPlayer target = EntityArgument.getPlayer(ctx, "target");
+        Map<String, String> vars = GuiVarStore.INSTANCE.getAll(target.getUUID());
         int count = vars.size();
-        GuiVarStore.INSTANCE.clear(target.getUuid());
-        ctx.getSource().sendFeedback(
-                () -> Text.literal("[GuiAPI] Cleared " + count + " var(s) for " + target.getName().getString() + "."), false);
+        GuiVarStore.INSTANCE.clear(target.getUUID());
+        ctx.getSource().sendSuccess(
+                () -> Component.literal("[GuiAPI] Cleared " + count + " var(s) for " + target.getName().getString() + "."), false);
         return count;
     }
 
-    private static int showHelp(CommandContext<ServerCommandSource> ctx) {
+    private static int showHelp(CommandContext<CommandSourceStack> ctx) {
         String help =
                 "[GuiAPI] Commands (permission level 2):\n" +
                 "  /guiapi open <id> [targets] - Open a GUI for yourself or target players\n" +
@@ -207,7 +209,7 @@ public class GuiCommand {
                 "              next_page | prev_page | goto_page | run_function\n" +
                 "              set_var | add_var | sub_var | reset_var | clear_vars\n" +
                 "              anvil_input" ;
-        ctx.getSource().sendFeedback(() -> Text.literal(help), false);
+        ctx.getSource().sendSuccess(() -> Component.literal(help), false);
         return 1;
     }
 }

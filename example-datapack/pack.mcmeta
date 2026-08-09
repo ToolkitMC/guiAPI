@@ -1,7 +1,7 @@
 {
   "pack": {
-    "description": "GUI API example datapack — demonstrates all GUI API features",
-    "pack_format": 48,
-    "supported_formats": { "min_inclusive": 48, "max_inclusive": 48 }
+    "description": "GUI API example datapack — demonstrates all GUI API features (Minecraft 26.2)",
+    "pack_format": 107,
+    "supported_formats": { "min_inclusive": 107, "max_inclusive": 107 }
   }
 }
