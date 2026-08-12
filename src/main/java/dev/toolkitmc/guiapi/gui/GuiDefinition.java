@@ -96,28 +96,30 @@ public class GuiDefinition {
     public enum ConditionType {
         HAS_TAG, NOT_TAG, SCORE_GT, SCORE_LT, SCORE_EQ,
         VAR_EQ, VAR_GT, VAR_LT, VAR_SET, HAS_ITEM, NOT_ITEM,
-        LEVEL_GT, LEVEL_LT, HEALTH_GT, HEALTH_LT, FOOD_GT, FOOD_LT;
+        LEVEL_GT, LEVEL_LT, HEALTH_GT, HEALTH_LT, FOOD_GT, FOOD_LT,
+        PERMISSION;
 
         public static ConditionType fromString(String s) {
             return switch (s.toLowerCase()) {
-                case "has_tag"   -> HAS_TAG;
-                case "not_tag"   -> NOT_TAG;
-                case "score_gt"  -> SCORE_GT;
-                case "score_lt"  -> SCORE_LT;
-                case "score_eq"  -> SCORE_EQ;
-                case "var_eq"    -> VAR_EQ;
-                case "var_gt"    -> VAR_GT;
-                case "var_lt"    -> VAR_LT;
-                case "var_set"   -> VAR_SET;
-                case "has_item"  -> HAS_ITEM;
-                case "not_item"  -> NOT_ITEM;
-                case "level_gt"  -> LEVEL_GT;
-                case "level_lt"  -> LEVEL_LT;
-                case "health_gt" -> HEALTH_GT;
-                case "health_lt" -> HEALTH_LT;
-                case "food_gt"   -> FOOD_GT;
-                case "food_lt"   -> FOOD_LT;
-                default          -> HAS_TAG;
+                case "has_tag"    -> HAS_TAG;
+                case "not_tag"    -> NOT_TAG;
+                case "score_gt"   -> SCORE_GT;
+                case "score_lt"   -> SCORE_LT;
+                case "score_eq"   -> SCORE_EQ;
+                case "var_eq"     -> VAR_EQ;
+                case "var_gt"     -> VAR_GT;
+                case "var_lt"     -> VAR_LT;
+                case "var_set"    -> VAR_SET;
+                case "has_item"   -> HAS_ITEM;
+                case "not_item"   -> NOT_ITEM;
+                case "level_gt"   -> LEVEL_GT;
+                case "level_lt"   -> LEVEL_LT;
+                case "health_gt"  -> HEALTH_GT;
+                case "health_lt"  -> HEALTH_LT;
+                case "food_gt"    -> FOOD_GT;
+                case "food_lt"    -> FOOD_LT;
+                case "permission" -> PERMISSION;
+                default           -> HAS_TAG;
             };
         }
     }

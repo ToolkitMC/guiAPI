@@ -1,7 +1,9 @@
 package dev.toolkitmc.guiapi;
 
 import dev.toolkitmc.guiapi.command.GuiCommand;
+import dev.toolkitmc.guiapi.component.GuiApiComponents;
 import dev.toolkitmc.guiapi.config.GuiApiConfig;
+import dev.toolkitmc.guiapi.event.OpenGuiItemUseHandler;
 import dev.toolkitmc.guiapi.loader.GuiRegistry;
 import dev.toolkitmc.guiapi.gui.BarrelGuiHandler;
 import net.fabricmc.api.ModInitializer;
@@ -23,6 +25,10 @@ public class GuiApiMod implements ModInitializer {
         LOGGER.info("[GuiAPI] Initializing...");
 
         GuiApiConfig.INSTANCE.load();
+
+        // Triggers GuiApiComponents' static init block, registering guiapi:open_gui.
+        GuiApiComponents.register();
+        OpenGuiItemUseHandler.register();
 
         ResourceManagerHelper.get(PackType.SERVER_DATA)
                 .registerReloadListener(GuiRegistry.INSTANCE);

@@ -646,6 +646,14 @@ public class BarrelGuiHandler {
             case HEALTH_LT -> player.getHealth() < parseFloatSafe(cond.value());
             case FOOD_GT -> player.getFoodData().getFoodLevel() > parseIntSafe(cond.value());
             case FOOD_LT -> player.getFoodData().getFoodLevel() < parseIntSafe(cond.value());
+            // TODO: PERMISSION condition type — needs the exact API for this project's
+            // Minecraft version (26.2). CommandSourceStack#hasPermission(int) and
+            // Player#hasPermissions(int) were both removed/changed here; the new
+            // permission system uses PermissionCheck/PermissionSet objects and I
+            // couldn't confirm the exact construction from available references.
+            // Falls back to "always false" (gate always blocks) rather than guessing
+            // wrong a third time and breaking the build again.
+            case PERMISSION -> false;
         };
     }
 
