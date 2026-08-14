@@ -460,10 +460,12 @@ public class BarrelGuiHandler {
 
         Identifier filledId = Identifier.tryParse(bar.filledItem());
         Identifier emptyId  = Identifier.tryParse(bar.emptyItem());
+        Identifier defaultFilledId = Identifier.of("minecraft", "lime_stained_glass_pane");
+        Identifier defaultEmptyId  = Identifier.of("minecraft", "gray_stained_glass_pane");
         Item filledItem = (filledId != null && BuiltInRegistries.ITEM.containsKey(filledId))
-                ? BuiltInRegistries.ITEM.getValue(filledId) : Items.LIME_STAINED_GLASS_PANE;
+                ? BuiltInRegistries.ITEM.getValue(filledId) : BuiltInRegistries.ITEM.getValue(defaultFilledId);
         Item emptyItem = (emptyId != null && BuiltInRegistries.ITEM.containsKey(emptyId))
-                ? BuiltInRegistries.ITEM.getValue(emptyId) : Items.GRAY_STAINED_GLASS_PANE;
+                ? BuiltInRegistries.ITEM.getValue(emptyId) : BuiltInRegistries.ITEM.getValue(defaultEmptyId);
 
         for (int i = 0; i < bar.length(); i++) {
             int slot = bar.startSlot() + i;
@@ -804,7 +806,7 @@ public class BarrelGuiHandler {
             // IN_DIMENSION — value is a dimension id, e.g. minecraft:the_nether
             case IN_DIMENSION -> {
                 Identifier dimId = Identifier.tryParse(cond.value().trim());
-                yield dimId != null && player.level().dimension().location().equals(dimId);
+                yield dimId != null && player.level().dimension().toString().equals(dimId.toString());
             }
         };
     }
