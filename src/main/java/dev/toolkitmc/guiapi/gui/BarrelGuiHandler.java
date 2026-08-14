@@ -228,9 +228,12 @@ public class BarrelGuiHandler {
             // Populate according to page buttons and conditions
             for (GuiDefinition.Button btn : def.getButtonsForPage(page)) {
                 if (btn.slot() < 0 || btn.slot() >= size) continue;
-                if (!evaluateCondition(player, btn)) continue;
+                if (!shouldRenderButton(player, btn)) continue;
                 inv.setItem(btn.slot(), buildStack(player, def, page, btn));
             }
+
+            // Populate non-button widgets (progress bars, static displays)
+            populateWidgets(player, def, page, inv, size);
 
             // Apply background filler for empty slots
             if (def.getFiller().isPresent()) {
@@ -392,9 +395,12 @@ public class BarrelGuiHandler {
 
         for (GuiDefinition.Button btn : def.getButtonsForPage(page)) {
             if (btn.slot() < 0 || btn.slot() >= size) continue;
-            if (!evaluateCondition(player, btn)) continue;
+            if (!shouldRenderButton(player, btn)) continue;
             inv.setItem(btn.slot(), buildStack(player, def, page, btn));
         }
+
+        // Populate non-button widgets (progress bars, static displays)
+        populateWidgets(player, def, page, inv, size);
 
         // Apply background filler for empty slots
         if (def.getFiller().isPresent()) {
@@ -408,6 +414,115 @@ public class BarrelGuiHandler {
         }
 
         return inv;
+    }
+
+    // ── Widget rendering (progress bars, static displays) ──────────────────────
+
+    private static void populateWidgets(ServerPlayer player, GuiDefinition def, int page, Container inv, int size) {
+        for (GuiDefinition.ProgressBarWidget bar : def.getProgressBarsForPage(page)) {
+            renderProgressBar(player, def, page, bar, inv, size);
+        }
+        for (GuiDefinition.StaticDisplayWidget disp : def.getDisplaysForPage(page)) {
+            if (disp.slot() < 0 || disp.slot() >= size) continue;
+            if (disp.condition().isPresent() && !evaluateStaticCondition(player, disp.condition().get())) continue;
+            inv.setItem(disp.slot(), buildStaticDisplayStack(player, def, page, disp));
+        }
+    }
+
+    private static boolean evaluateStaticCondition(ServerPlayer player, GuiDefinition.ButtonCondition cond) {
+        // Reuses the same condition logic as buttons by wrapping into a throwaway
+        // Button-shaped evaluation — avoids duplicating the switch in evaluateCondition.
+        GuiDefinition.Button fake = new GuiDefinition.Button(
+                0, 0, "", "", List.of(), false, GuiDefinition.ClickType.ANY,
+                Optional.of(cond), List.of(), Optional.empty(), Optional.empty(), Optional.empty(),
+                "1", false, false, Optional.empty(), 0);
+        return evaluateCondition(player, fake);
+    }
+
+    private static int readWidgetValue(ServerPlayer player, String valueSource) {
+        String[] parts = valueSource.split(":", 2);
+        if (parts.length != 2) return 0;
+        String kind = parts[0].trim().toLowerCase();
+        String key = parts[1].trim();
+        return switch (kind) {
+            case "score" -> getScore(player, key);
+            case "var"   -> GuiVarStore.INSTANCE.getInt(player.getUUID(), key);
+            default -> 0;
+        };
+    }
+
+    private static void renderProgressBar(ServerPlayer player, GuiDefinition def, int page,
+                                          GuiDefinition.ProgressBarWidget bar, Container inv, int size) {
+        int value = Math.clamp(readWidgetValue(player, bar.valueSource()), 0, bar.maxValue());
+        int filledSlots = bar.maxValue() <= 0 ? 0
+                : (int) Math.round((value / (double) bar.maxValue()) * bar.length());
+        filledSlots = Math.clamp(filledSlots, 0, bar.length());
+
+        Identifier filledId = Identifier.tryParse(bar.filledItem());
+        Identifier emptyId  = Identifier.tryParse(bar.emptyItem());
+        Identifier defaultFilledId = Identifier.tryParse("minecraft:lime_stained_glass_pane");
+        Identifier defaultEmptyId  = Identifier.tryParse("minecraft:gray_stained_glass_pane");
+        Item filledItem = (filledId != null && BuiltInRegistries.ITEM.containsKey(filledId))
+                ? BuiltInRegistries.ITEM.getValue(filledId) : BuiltInRegistries.ITEM.getValue(defaultFilledId);
+        Item emptyItem = (emptyId != null && BuiltInRegistries.ITEM.containsKey(emptyId))
+                ? BuiltInRegistries.ITEM.getValue(emptyId) : BuiltInRegistries.ITEM.getValue(defaultEmptyId);
+
+        for (int i = 0; i < bar.length(); i++) {
+            int slot = bar.startSlot() + i;
+            if (slot < 0 || slot >= size) continue;
+            boolean filled = i < filledSlots;
+            ItemStack stack = new ItemStack(filled ? filledItem : emptyItem);
+            String resolvedName = resolve(bar.name(), player, def, page);
+            if (!resolvedName.isEmpty()) {
+                stack.set(DataComponents.CUSTOM_NAME,
+                        Component.literal(resolvedName).withStyle(s -> s.withItalic(false)));
+            }
+            if (!bar.lore().isEmpty()) {
+                List<Component> loreTexts = new java.util.ArrayList<>();
+                for (String l : bar.lore()) {
+                    loreTexts.add(Component.literal(resolve(l, player, def, page)).withStyle(s -> s.withItalic(false)));
+                }
+                stack.set(DataComponents.LORE, new ItemLore(loreTexts));
+            }
+            stack.set(DataComponents.CUSTOM_DATA, CustomData.of(new CompoundTag()));
+            net.minecraft.world.item.component.TooltipDisplay tooltipDisplay =
+                    new net.minecraft.world.item.component.TooltipDisplay(false, new java.util.LinkedHashSet<>());
+            if (resolvedName.isEmpty() && bar.lore().isEmpty()) {
+                stack.set(DataComponents.TOOLTIP_DISPLAY, tooltipDisplay);
+            }
+            inv.setItem(slot, stack);
+        }
+    }
+
+    private static ItemStack buildStaticDisplayStack(ServerPlayer player, GuiDefinition def, int page,
+                                                      GuiDefinition.StaticDisplayWidget disp) {
+        Identifier id = Identifier.tryParse(resolve(disp.item(), player, def, page));
+        Item item = (id != null && BuiltInRegistries.ITEM.containsKey(id))
+                ? BuiltInRegistries.ITEM.getValue(id) : Items.PAPER;
+
+        int amount = 1;
+        try {
+            amount = Math.clamp(Integer.parseInt(resolve(disp.amount(), player, def, page)), 1, 99);
+        } catch (NumberFormatException ignored) {}
+
+        ItemStack stack = new ItemStack(item, amount);
+        String resolvedName = resolve(disp.name(), player, def, page);
+        if (!resolvedName.isEmpty()) {
+            stack.set(DataComponents.CUSTOM_NAME,
+                    Component.literal(resolvedName).withStyle(s -> s.withItalic(false)));
+        }
+        if (!disp.lore().isEmpty()) {
+            List<Component> loreTexts = new java.util.ArrayList<>();
+            for (String l : disp.lore()) {
+                loreTexts.add(Component.literal(resolve(l, player, def, page)).withStyle(s -> s.withItalic(false)));
+            }
+            stack.set(DataComponents.LORE, new ItemLore(loreTexts));
+        }
+        if (disp.glint() && dev.toolkitmc.guiapi.config.GuiApiConfig.INSTANCE.isEnableButtonGlint()) {
+            stack.set(DataComponents.ENCHANTMENT_GLINT_OVERRIDE, true);
+        }
+        stack.set(DataComponents.CUSTOM_DATA, CustomData.of(new CompoundTag()));
+        return stack;
     }
 
     private static ItemStack buildFillerStack(GuiDefinition.FillerConfig fill) {
@@ -459,6 +574,20 @@ public class BarrelGuiHandler {
             amountStr = on ? tgl.amountOn() : tgl.amountOff();
             hideTooltip = on ? tgl.hideTooltipOn() : tgl.hideTooltipOff();
             hideAdditionalTooltip = on ? tgl.hideAdditionalTooltipOn() : tgl.hideAdditionalTooltipOff();
+        } else if (btn.elseDisplay().isPresent() && btn.condition().isPresent()
+                && !evaluateCondition(player, btn)) {
+            // Condition failed but an else_item was defined — show the alternate
+            // appearance instead of the button's normal item (button stays visible).
+            GuiDefinition.ConditionalDisplay alt = btn.elseDisplay().get();
+            itemId = alt.item();
+            name   = alt.name();
+            lore   = alt.lore();
+            glint  = alt.glint();
+            customModelData = alt.customModelData();
+            itemModel = alt.itemModel();
+            amountStr = alt.amount();
+            hideTooltip = alt.hideTooltip();
+            hideAdditionalTooltip = alt.hideAdditionalTooltip();
         } else {
             itemId = btn.item();
             name   = btn.name();
@@ -598,6 +727,20 @@ public class BarrelGuiHandler {
 
     // ── Condition evaluation ─────────────────────────────────────────────────
 
+    /**
+     * Whether a button should be rendered in the inventory at all.
+     * Normally identical to {@link #evaluateCondition}, but a button with an
+     * {@code else_item} defined stays visible (showing the alternate appearance)
+     * even when its condition is false, instead of being hidden.
+     * Clickability is NOT affected by this — {@link #handleClick} still gates
+     * on {@link #evaluateCondition} directly, so an else-item button is visible
+     * but inert while its condition is false.
+     */
+    static boolean shouldRenderButton(ServerPlayer player, GuiDefinition.Button btn) {
+        if (btn.elseDisplay().isPresent() && btn.condition().isPresent()) return true;
+        return evaluateCondition(player, btn);
+    }
+
     static boolean evaluateCondition(ServerPlayer player, GuiDefinition.Button btn) {
         if (btn.condition().isEmpty()) return true;
 
@@ -629,15 +772,21 @@ public class BarrelGuiHandler {
             }
             case VAR_SET  -> GuiVarStore.INSTANCE.get(player.getUUID(), cond.value()) != null;
             case HAS_ITEM -> {
-                String[] parts = cond.value().split(":", 2);
-                String itemId = parts[0];
-                int amount = parts.length > 1 ? parseIntSafe(parts[1]) : 1;
+                int lastColon = cond.value().lastIndexOf(':');
+                String itemId = lastColon > 0 && cond.value().indexOf(':') != lastColon
+                        ? cond.value().substring(0, lastColon) : cond.value();
+                String amountPart = lastColon > 0 && cond.value().indexOf(':') != lastColon
+                        ? cond.value().substring(lastColon + 1) : null;
+                int amount = amountPart != null ? parseIntSafe(amountPart) : 1;
                 yield hasItemCount(player, itemId, amount);
             }
             case NOT_ITEM -> {
-                String[] parts = cond.value().split(":", 2);
-                String itemId = parts[0];
-                int amount = parts.length > 1 ? parseIntSafe(parts[1]) : 1;
+                int lastColon = cond.value().lastIndexOf(':');
+                String itemId = lastColon > 0 && cond.value().indexOf(':') != lastColon
+                        ? cond.value().substring(0, lastColon) : cond.value();
+                String amountPart = lastColon > 0 && cond.value().indexOf(':') != lastColon
+                        ? cond.value().substring(lastColon + 1) : null;
+                int amount = amountPart != null ? parseIntSafe(amountPart) : 1;
                 yield !hasItemCount(player, itemId, amount);
             }
             case LEVEL_GT -> player.experienceLevel > parseIntSafe(cond.value());
@@ -646,14 +795,25 @@ public class BarrelGuiHandler {
             case HEALTH_LT -> player.getHealth() < parseFloatSafe(cond.value());
             case FOOD_GT -> player.getFoodData().getFoodLevel() > parseIntSafe(cond.value());
             case FOOD_LT -> player.getFoodData().getFoodLevel() < parseIntSafe(cond.value());
-            // TODO: PERMISSION condition type — needs the exact API for this project's
-            // Minecraft version (26.2). CommandSourceStack#hasPermission(int) and
-            // Player#hasPermissions(int) were both removed/changed here; the new
-            // permission system uses PermissionCheck/PermissionSet objects and I
-            // couldn't confirm the exact construction from available references.
-            // Falls back to "always false" (gate always blocks) rather than guessing
-            // wrong a third time and breaking the build again.
-            case PERMISSION -> false;
+            // PERMISSION condition — value is the required permission level (0-4).
+            // Uses the same Permission.HasCommandLevel API already used by GuiCommand
+            // for the /guiapi command's own permission gate (confirmed working there).
+            case PERMISSION -> {
+                int requiredLevel = Math.clamp(parseIntSafe(cond.value()), 0, 4);
+                yield player.createCommandSourceStack().permissions().hasPermission(
+                        new net.minecraft.server.permissions.Permission.HasCommandLevel(
+                                net.minecraft.server.permissions.PermissionLevel.byId(requiredLevel)));
+            }
+            // GAMEMODE — value is survival | creative | adventure | spectator
+            case GAMEMODE -> {
+                net.minecraft.world.level.GameType current = player.gameMode.getGameModeForPlayer();
+                yield current.getName().equalsIgnoreCase(cond.value().trim());
+            }
+            // IN_DIMENSION — value is a dimension id, e.g. minecraft:the_nether
+            case IN_DIMENSION -> {
+                Identifier dimId = Identifier.tryParse(cond.value().trim());
+                yield dimId != null && player.level().dimension().toString().equals(dimId.toString());
+            }
         };
     }
 
@@ -693,6 +853,32 @@ public class BarrelGuiHandler {
             }
         }
         // Sync player inventory with client
+        player.containerMenu.broadcastChanges();
+    }
+
+    /**
+     * Gives the player {@code amount} of {@code itemId}, splitting across the item's
+     * max stack size. Overflow that doesn't fit in the inventory is dropped at the
+     * player's feet (matches vanilla /give behavior) rather than silently discarded.
+     */
+    private static void giveItemCount(ServerPlayer player, String itemId, int amount) {
+        Identifier id = Identifier.tryParse(itemId);
+        if (id == null || !BuiltInRegistries.ITEM.containsKey(id)) {
+            if (dev.toolkitmc.guiapi.config.GuiApiConfig.INSTANCE.isLogUnknownItems())
+                GuiApiMod.LOGGER.warn("[GuiAPI] Unknown item '{}' in give_item action.", itemId);
+            return;
+        }
+        Item targetItem = BuiltInRegistries.ITEM.getValue(id);
+        int remaining = amount;
+        while (remaining > 0) {
+            ItemStack stack = new ItemStack(targetItem);
+            int give = Math.min(remaining, stack.getMaxStackSize());
+            stack.setCount(give);
+            remaining -= give;
+            if (!player.getInventory().add(stack)) {
+                player.drop(stack, false);
+            }
+        }
         player.containerMenu.broadcastChanges();
     }
 
@@ -775,6 +961,57 @@ public class BarrelGuiHandler {
                 java.util.List<GuiDefinition.ButtonAction> macroActions = def.getMacros().get(macroName);
                 if (macroActions != null && !macroActions.isEmpty()) {
                     executeDelayedActionChain(player, def, currentPage, macroActions, 0, false);
+                }
+            }
+            case RUN_RANDOM_FUNCTION -> {
+                // value: comma-separated macro names, each optionally weighted "name*weight"
+                // e.g. "common*70,rare*25,legendary*5" — plain "name" defaults to weight 1.
+                String resolvedList = resolve(action.value(), player, def, currentPage);
+                String[] entries = resolvedList.split(",");
+                java.util.List<String> pool = new java.util.ArrayList<>();
+                for (String entry : entries) {
+                    String trimmed = entry.trim();
+                    if (trimmed.isEmpty()) continue;
+                    String name = trimmed;
+                    int weight = 1;
+                    int star = trimmed.indexOf('*');
+                    if (star > 0) {
+                        name = trimmed.substring(0, star).trim();
+                        weight = Math.max(1, parseIntSafe(trimmed.substring(star + 1).trim()));
+                    }
+                    if (!def.getMacros().containsKey(name)) continue;
+                    for (int w = 0; w < weight; w++) pool.add(name);
+                }
+                if (!pool.isEmpty()) {
+                    String chosen = pool.get(java.util.concurrent.ThreadLocalRandom.current().nextInt(pool.size()));
+                    java.util.List<GuiDefinition.ButtonAction> macroActions = def.getMacros().get(chosen);
+                    debug("random_function: player={} chosen={} pool_size={}", player.getScoreboardName(), chosen, pool.size());
+                    if (macroActions != null && !macroActions.isEmpty()) {
+                        executeDelayedActionChain(player, def, currentPage, macroActions, 0, false);
+                    }
+                } else {
+                    GuiApiMod.LOGGER.warn("[GuiAPI] run_random_function had no valid macros to choose from: {}", resolvedList);
+                }
+            }
+            case SET_GAMEMODE -> {
+                if (!dev.toolkitmc.guiapi.config.GuiApiConfig.INSTANCE.isAllowGamemodeChange()) {
+                    if (!dev.toolkitmc.guiapi.config.GuiApiConfig.INSTANCE.isMuteClickErrors()) {
+                        GuiApiMod.LOGGER.warn("[GuiAPI] set_gamemode is disabled in config. Skipping.");
+                    }
+                    break;
+                }
+                String resolvedGm = resolve(action.value(), player, def, currentPage).trim().toLowerCase();
+                net.minecraft.world.level.GameType target = switch (resolvedGm) {
+                    case "survival"  -> net.minecraft.world.level.GameType.SURVIVAL;
+                    case "creative"  -> net.minecraft.world.level.GameType.CREATIVE;
+                    case "adventure" -> net.minecraft.world.level.GameType.ADVENTURE;
+                    case "spectator" -> net.minecraft.world.level.GameType.SPECTATOR;
+                    default -> null;
+                };
+                if (target != null) {
+                    player.setGameMode(target);
+                } else {
+                    GuiApiMod.LOGGER.warn("[GuiAPI] Unknown gamemode '{}' in set_gamemode action.", resolvedGm);
                 }
             }
             case CLOSE -> {
@@ -893,10 +1130,31 @@ public class BarrelGuiHandler {
             case CLEAR_VARS -> GuiVarStore.INSTANCE.clear(player.getUUID());
             case REFRESH -> refreshCurrentGui(player);
             case TAKE_ITEM -> {
-                String[] parts = action.value().split(":", 2);
+                String resolved = resolve(action.value(), player, def, currentPage);
+                String[] parts = resolved.split(":", 2);
                 String itemId = parts[0];
                 int amount = parts.length > 1 ? parseIntSafe(parts[1]) : 1;
                 takeItemCount(player, itemId, amount);
+            }
+            case GIVE_ITEM -> {
+                String resolved = resolve(action.value(), player, def, currentPage);
+                String[] parts = resolved.split(":", 2);
+                String itemId = parts[0];
+                int amount = parts.length > 1 ? Math.max(1, parseIntSafe(parts[1])) : 1;
+                giveItemCount(player, itemId, amount);
+            }
+            case ADD_XP -> {
+                String resolved = resolve(action.value(), player, def, currentPage);
+                boolean isLevels = resolved.startsWith("L") || resolved.startsWith("l");
+                String numeric = isLevels ? resolved.substring(1) : resolved;
+                try {
+                    int amount = Integer.parseInt(numeric.trim());
+                    if (isLevels) {
+                        player.giveExperienceLevels(amount);
+                    } else {
+                        player.giveExperiencePoints(amount);
+                    }
+                } catch (NumberFormatException ignored) {}
             }
             case SET_SCORE -> {
                 String resolved = resolve(action.value(), player, def, currentPage);

@@ -50,9 +50,9 @@ public class GuiDefinition {
 
     public enum ActionType {
         RUN_COMMAND, CLOSE, OPEN_GUI, MESSAGE, NEXT_PAGE, PREV_PAGE, GOTO_PAGE, SOUND,
-        SET_VAR, ADD_VAR, SUB_VAR, RESET_VAR, CLEAR_VARS, REFRESH, TAKE_ITEM,
-        SET_SCORE, ADD_SCORE, SUB_SCORE, ACTION_BAR,
-        ADD_EFFECT, REMOVE_EFFECT, CLEAR_EFFECTS, NONE, ANVIL_INPUT, RUN_FUNCTION;
+        SET_VAR, ADD_VAR, SUB_VAR, RESET_VAR, CLEAR_VARS, REFRESH, TAKE_ITEM, GIVE_ITEM,
+        SET_SCORE, ADD_SCORE, SUB_SCORE, ACTION_BAR, ADD_XP,
+        ADD_EFFECT, REMOVE_EFFECT, CLEAR_EFFECTS, NONE, ANVIL_INPUT, RUN_FUNCTION, RUN_RANDOM_FUNCTION, SET_GAMEMODE;
 
         public static ActionType fromString(String s) {
             return switch (s.toLowerCase()) {
@@ -71,16 +71,20 @@ public class GuiDefinition {
                 case "clear_vars"  -> CLEAR_VARS;
                 case "refresh"     -> REFRESH;
                 case "take_item"   -> TAKE_ITEM;
+                case "give_item"   -> GIVE_ITEM;
                 case "set_score"   -> SET_SCORE;
                 case "add_score"   -> ADD_SCORE;
                 case "sub_score"   -> SUB_SCORE;
                 case "action_bar"  -> ACTION_BAR;
+                case "add_xp"      -> ADD_XP;
                 case "add_effect"     -> ADD_EFFECT;
                 case "remove_effect"  -> REMOVE_EFFECT;
                 case "clear_effects"  -> CLEAR_EFFECTS;
                 case "none"           -> NONE;
                 case "anvil_input"    -> ANVIL_INPUT;
                 case "run_function"   -> RUN_FUNCTION;
+                case "run_random_function" -> RUN_RANDOM_FUNCTION;
+                case "set_gamemode" -> SET_GAMEMODE;
                 default            -> NONE;
             };
         }
@@ -97,7 +101,7 @@ public class GuiDefinition {
         HAS_TAG, NOT_TAG, SCORE_GT, SCORE_LT, SCORE_EQ,
         VAR_EQ, VAR_GT, VAR_LT, VAR_SET, HAS_ITEM, NOT_ITEM,
         LEVEL_GT, LEVEL_LT, HEALTH_GT, HEALTH_LT, FOOD_GT, FOOD_LT,
-        PERMISSION;
+        PERMISSION, GAMEMODE, IN_DIMENSION;
 
         public static ConditionType fromString(String s) {
             return switch (s.toLowerCase()) {
@@ -119,6 +123,8 @@ public class GuiDefinition {
                 case "food_gt"    -> FOOD_GT;
                 case "food_lt"    -> FOOD_LT;
                 case "permission" -> PERMISSION;
+                case "gamemode"      -> GAMEMODE;
+                case "in_dimension"  -> IN_DIMENSION;
                 default           -> HAS_TAG;
             };
         }
@@ -143,6 +149,63 @@ public class GuiDefinition {
     }
 
     public record ButtonCondition(ConditionType type, String value) {}
+
+    /**
+     * PROGRESS_BAR widget — a horizontal run of slots that visually fills based on
+     * a runtime value (score or var), recalculated every render (tick_rate refresh
+     * or GUI open), unlike a static Button.
+     *
+     * value_source: "score:<objective>" or "var:<key>" — read as an integer.
+     * The bar fills fractionally across [start_slot, start_slot + length) based on
+     * value / max_value, clamped to [0, length].
+     */
+    public record ProgressBarWidget(
+            int startSlot,
+            int length,
+            int page,
+            String valueSource,
+            int maxValue,
+            String filledItem,
+            String emptyItem,
+            String name,
+            List<String> lore
+    ) {}
+
+    /**
+     * STATIC_DISPLAY widget — a read-only, non-clickable item purely for showing
+     * information (e.g. "Your score: {score:coins}"). Unlike a Button it has no
+     * actions, no click_type, and clicks on its slot are simply ignored (no-op),
+     * distinguishing it from a Button with an empty action list (which still
+     * consumes the click and could theoretically be misused as an invisible gate).
+     */
+    public record StaticDisplayWidget(
+            int slot,
+            int page,
+            String item,
+            String name,
+            List<String> lore,
+            boolean glint,
+            Optional<ButtonCondition> condition,
+            String amount
+    ) {}
+
+    /**
+     * Alternate ("else") appearance shown on a button when its {@code condition}
+     * evaluates to false, instead of the button being hidden entirely.
+     * Only display fields are overridden — slot, page, click_type, and actions
+     * always come from the parent Button.
+     */
+    public record ConditionalDisplay(
+            String item,
+            String name,
+            List<String> lore,
+            boolean glint,
+            Optional<CustomModelDataConfig> customModelData,
+            Optional<String> itemModel,
+            String amount,
+            boolean hideTooltip,
+            boolean hideAdditionalTooltip
+    ) {}
 
     /**
      * 1.21.4+ Multi-value Custom Model Data representation
@@ -208,6 +271,7 @@ public class GuiDefinition {
             String amount,
             boolean hideTooltip,
             boolean hideAdditionalTooltip,
+            Optional<ConditionalDisplay> elseDisplay,
             int cooldown
     ) {}
 
@@ -225,6 +289,11 @@ public class GuiDefinition {
     private final boolean closeOnMove;
     private final ContainerType containerType;
     private final java.util.Map<String, List<ButtonAction>> macros;
+
+    // Set post-construction by parse() only — kept off every constructor signature
+    // so none of the existing GuiDefinition(...) / create(...) overloads break.
+    private List<ProgressBarWidget> progressBars = List.of();
+    private List<StaticDisplayWidget> displays = List.of();
 
     // ── Constructor ──────────────────────────────────────────────────────────
 
@@ -352,7 +421,59 @@ public class GuiDefinition {
             }
         }
 
-        return new GuiDefinition(id, title, rows, buttons, onOpen, onClose, filler, tickRate, closeOnMove, containerType, macros);
+        GuiDefinition def = new GuiDefinition(id, title, rows, buttons, onOpen, onClose, filler, tickRate, closeOnMove, containerType, macros);
+
+        List<ProgressBarWidget> progressBars = new ArrayList<>();
+        if (obj.has("progress_bars") && obj.get("progress_bars").isJsonArray()) {
+            for (JsonElement el : obj.getAsJsonArray("progress_bars")) {
+                progressBars.add(parseProgressBar(el.getAsJsonObject()));
+            }
+        }
+        def.progressBars = progressBars;
+
+        List<StaticDisplayWidget> displays = new ArrayList<>();
+        if (obj.has("displays") && obj.get("displays").isJsonArray()) {
+            for (JsonElement el : obj.getAsJsonArray("displays")) {
+                displays.add(parseStaticDisplay(el.getAsJsonObject()));
+            }
+        }
+        def.displays = displays;
+
+        return def;
+    }
+
+    private static ProgressBarWidget parseProgressBar(JsonObject p) {
+        int startSlot = p.has("start_slot") ? Math.max(0, p.get("start_slot").getAsInt()) : 0;
+        int length    = p.has("length") ? Math.max(1, p.get("length").getAsInt()) : 9;
+        int page      = p.has("page") ? Math.max(0, p.get("page").getAsInt()) : 0;
+        String valueSource = p.has("value_source") ? p.get("value_source").getAsString() : "var:progress";
+        int maxValue  = p.has("max_value") ? Math.max(1, p.get("max_value").getAsInt()) : 100;
+        String filledItem = p.has("filled_item") ? p.get("filled_item").getAsString() : "minecraft:lime_stained_glass_pane";
+        String emptyItem  = p.has("empty_item")  ? p.get("empty_item").getAsString()  : "minecraft:gray_stained_glass_pane";
+        String name = p.has("name") ? p.get("name").getAsString() : "";
+        List<String> lore = parseStringList(p, "lore");
+        return new ProgressBarWidget(startSlot, length, page, valueSource, maxValue, filledItem, emptyItem, name, lore);
+    }
+
+    private static StaticDisplayWidget parseStaticDisplay(JsonObject d) {
+        int slot = d.has("slot") ? d.get("slot").getAsInt() : 0;
+        int page = d.has("page") ? Math.max(0, d.get("page").getAsInt()) : 0;
+        String item = d.has("item") ? d.get("item").getAsString() : "minecraft:paper";
+        String name = d.has("name") ? d.get("name").getAsString() : "";
+        List<String> lore = parseStringList(d, "lore");
+        boolean glint = d.has("glint") && d.get("glint").getAsBoolean();
+        String amount = d.has("amount") ? d.get("amount").getAsString() : "1";
+
+        Optional<ButtonCondition> condition = Optional.empty();
+        if (d.has("condition") && d.get("condition").isJsonObject()) {
+            JsonObject c = d.getAsJsonObject("condition");
+            ConditionType ct = ConditionType.fromString(
+                    c.has("type") ? c.get("type").getAsString() : "has_tag");
+            String cv = c.has("value") ? c.get("value").getAsString() : "";
+            condition = Optional.of(new ButtonCondition(ct, cv));
+        }
+
+        return new StaticDisplayWidget(slot, page, item, name, lore, glint, condition, amount);
     }
 
     private static List<ButtonAction> parseActionList(JsonObject obj, String key) {
@@ -383,12 +504,19 @@ public class GuiDefinition {
 
         int cooldown = b.has("cooldown") ? Math.max(0, b.get("cooldown").getAsInt()) : 0;
 
+        // Optional "else_item" — alternate appearance shown when the condition is false,
+        // instead of hiding the button entirely.
+        Optional<ConditionalDisplay> elseDisplay = Optional.empty();
+        if (b.has("else_item") && b.get("else_item").isJsonObject()) {
+            elseDisplay = Optional.of(parseConditionalDisplay(b.getAsJsonObject("else_item")));
+        }
+
         // Toggle button — item/name/lore/actions come from the toggle definition
         if (b.has("toggle") && b.get("toggle").isJsonObject()) {
             ToggleDefinition toggle = parseToggle(b.getAsJsonObject("toggle"));
             return new Button(slot, page, "", "", List.of(), false,
                     clickType, condition, List.of(), Optional.of(toggle), Optional.empty(), Optional.empty(),
-                    "1", false, false, cooldown);
+                    "1", false, false, elseDisplay, cooldown);
         }
 
         // Standard button
@@ -421,7 +549,31 @@ public class GuiDefinition {
         boolean hideAdditionalTooltip = b.has("hide_additional_tooltip") && b.get("hide_additional_tooltip").getAsBoolean();
 
         return new Button(slot, page, item, name, lore, glint, clickType, condition, actions, Optional.empty(),
-                customModelData, itemModel, amount, hideTooltip, hideAdditionalTooltip, cooldown);
+                customModelData, itemModel, amount, hideTooltip, hideAdditionalTooltip, elseDisplay, cooldown);
+    }
+
+    /**
+     * Parses an "else_item" block — same fields as a standard button's visual
+     * fields, minus slot/page/click_type/actions (those stay on the parent Button).
+     */
+    private static ConditionalDisplay parseConditionalDisplay(JsonObject e) {
+        String item  = e.has("item") ? e.get("item").getAsString() : "minecraft:barrier";
+        String name  = e.has("name") ? e.get("name").getAsString() : "";
+        boolean glint = e.has("glint") && e.get("glint").getAsBoolean();
+
+        List<String> lore = parseStringList(e, "lore");
+
+        Optional<CustomModelDataConfig> customModelData = parseCustomModelData(e, "custom_model_data");
+        Optional<String> itemModel = e.has("item_model")
+                ? Optional.of(e.get("item_model").getAsString())
+                : Optional.empty();
+
+        String amount = e.has("amount") ? e.get("amount").getAsString() : "1";
+        boolean hideTooltip = e.has("hide_tooltip") && e.get("hide_tooltip").getAsBoolean();
+        boolean hideAdditionalTooltip = e.has("hide_additional_tooltip") && e.get("hide_additional_tooltip").getAsBoolean();
+
+        return new ConditionalDisplay(item, name, lore, glint, customModelData, itemModel,
+                amount, hideTooltip, hideAdditionalTooltip);
     }
 
     private static Optional<CustomModelDataConfig> parseCustomModelData(JsonObject obj, String key) {
@@ -550,6 +702,15 @@ public class GuiDefinition {
     public boolean isCloseOnMove()         { return closeOnMove; }
     public ContainerType getContainerType() { return containerType; }
     public java.util.Map<String, List<ButtonAction>> getMacros() { return macros; }
+    public List<ProgressBarWidget> getProgressBars() { return progressBars; }
+    public List<StaticDisplayWidget> getDisplays()   { return displays; }
+
+    public List<ProgressBarWidget> getProgressBarsForPage(int page) {
+        return progressBars.stream().filter(p -> p.page() == page).toList();
+    }
+    public List<StaticDisplayWidget> getDisplaysForPage(int page) {
+        return displays.stream().filter(d -> d.page() == page).toList();
+    }
 
     /** Returns only buttons belonging to the given page. */
     public List<Button> getButtonsForPage(int page) {
