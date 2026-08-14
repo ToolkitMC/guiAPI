@@ -772,15 +772,21 @@ public class BarrelGuiHandler {
             }
             case VAR_SET  -> GuiVarStore.INSTANCE.get(player.getUUID(), cond.value()) != null;
             case HAS_ITEM -> {
-                String[] parts = cond.value().split(":", 2);
-                String itemId = parts[0];
-                int amount = parts.length > 1 ? parseIntSafe(parts[1]) : 1;
+                int lastColon = cond.value().lastIndexOf(':');
+                String itemId = lastColon > 0 && cond.value().indexOf(':') != lastColon
+                        ? cond.value().substring(0, lastColon) : cond.value();
+                String amountPart = lastColon > 0 && cond.value().indexOf(':') != lastColon
+                        ? cond.value().substring(lastColon + 1) : null;
+                int amount = amountPart != null ? parseIntSafe(amountPart) : 1;
                 yield hasItemCount(player, itemId, amount);
             }
             case NOT_ITEM -> {
-                String[] parts = cond.value().split(":", 2);
-                String itemId = parts[0];
-                int amount = parts.length > 1 ? parseIntSafe(parts[1]) : 1;
+                int lastColon = cond.value().lastIndexOf(':');
+                String itemId = lastColon > 0 && cond.value().indexOf(':') != lastColon
+                        ? cond.value().substring(0, lastColon) : cond.value();
+                String amountPart = lastColon > 0 && cond.value().indexOf(':') != lastColon
+                        ? cond.value().substring(lastColon + 1) : null;
+                int amount = amountPart != null ? parseIntSafe(amountPart) : 1;
                 yield !hasItemCount(player, itemId, amount);
             }
             case LEVEL_GT -> player.experienceLevel > parseIntSafe(cond.value());
