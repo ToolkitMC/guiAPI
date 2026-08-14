@@ -196,19 +196,48 @@ public class GuiCommand {
                 "\n" +
                 "Macro functions: define reusable action blocks in JSON with \"macros\": {}\n" +
                 "  actions: run_function:<macro_name>\n" +
+                "  random:  run_random_function:<name>[*weight](,<name>[*weight]...)\n" +
+                "           e.g. run_random_function:common*70,rare*25,legendary*5\n" +
                 "\n" +
                 "Anvil input: anvil_input action saves text to a variable and {input}\n" +
                 "  Example: {\"type\": \"anvil_input\", \"var\": \"myVar\", \"value\": \"Enter name|Default\"}\n" +
+                "\n" +
+                "Item/XP actions:\n" +
+                "  give_item:<itemId>:<amount>   - give item(s), overflow drops at feet\n" +
+                "  take_item:<itemId>:<amount>   - remove item(s) from inventory\n" +
+                "  add_xp:<n>                    - add n XP points\n" +
+                "  add_xp:L<n>                   - add n XP levels (prefix with L)\n" +
                 "\n" +
                 "Button JSON fields:\n" +
                 "  slot, page, item, name, lore, glint\n" +
                 "  click_type: any | left | right | shift\n" +
                 "  condition:  has_tag | not_tag | score_gt | score_lt | score_eq\n" +
                 "              var_eq | var_gt | var_lt | var_set\n" +
-                "  actions:    run_command | close | open_gui | message | sound\n" +
+                "              has_item | not_item | level_gt | level_lt\n" +
+                "              health_gt | health_lt | food_gt | food_lt\n" +
+                "              permission:<0-4>   (checks player's command permission level)\n" +
+                "  actions:    run_command | close | open_gui | message | sound | action_bar\n" +
                 "              next_page | prev_page | goto_page | run_function\n" +
+                "              run_random_function | give_item | take_item | add_xp\n" +
                 "              set_var | add_var | sub_var | reset_var | clear_vars\n" +
-                "              anvil_input" ;
+                "              set_score | add_score | sub_score\n" +
+                "              add_effect | remove_effect | clear_effects\n" +
+                "              anvil_input\n" +
+                "\n" +
+                "Conditional item display: add \"else_item\" (same fields as a button)\n" +
+                "  alongside \"condition\" to show an alternate item instead of hiding\n" +
+                "  the button when the condition is false. Button stays inert while\n" +
+                "  showing else_item (clicks are ignored, not the normal actions).\n" +
+                "\n" +
+                "Non-button widgets (top-level GUI JSON fields):\n" +
+                "  progress_bars: [{ start_slot, length, page, value_source,\n" +
+                "                    max_value, filled_item, empty_item, name, lore }]\n" +
+                "    value_source: \"score:<objective>\" or \"var:<key>\"\n" +
+                "    Fills [start_slot, start_slot+length) proportionally, recalculated\n" +
+                "    on every open/refresh (e.g. via tick_rate). Read-only, not clickable.\n" +
+                "  displays: [{ slot, page, item, name, lore, glint, amount, condition }]\n" +
+                "    A single read-only info item. Supports the same condition types as\n" +
+                "    buttons. Clicks on a display slot are always ignored.";
         ctx.getSource().sendSuccess(() -> Component.literal(help), false);
         return 1;
     }

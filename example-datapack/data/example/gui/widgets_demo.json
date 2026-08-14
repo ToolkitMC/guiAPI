@@ -1,0 +1,82 @@
+{
+  "title": "§bWidgets & Conditional Item Demo",
+  "rows": 4,
+  "tick_rate": 20,
+  "filler": {
+    "item": "minecraft:black_stained_glass_pane",
+    "name": " ",
+    "hide_tooltip": true
+  },
+
+  "buttons": [
+    {
+      "slot": 4,
+      "item": "minecraft:diamond_sword",
+      "name": "§b1. Conditional Item (else_item)",
+      "lore": [
+        "§7Same button — item flips automatically",
+        "§7based on whether you have enough gold.",
+        "§7Try: /scoreboard players set @s gold_nuggets 5"
+      ],
+      "condition": { "type": "has_item", "value": "minecraft:gold_nugget:5" },
+      "actions": [
+        { "type": "take_item", "value": "minecraft:gold_nugget:5" },
+        { "type": "run_command", "value": "give @s minecraft:diamond", "run_with": "console" },
+        { "type": "sound", "value": "minecraft:entity.villager.yes" },
+        { "type": "action_bar", "value": "§aPurchased!" },
+        { "type": "refresh" }
+      ],
+      "else_item": {
+        "item": "minecraft:barrier",
+        "name": "§c1. Conditional Item §7(Locked)",
+        "lore": [
+          "§7Cost: §e5 Gold Nuggets",
+          "§cYou don't have enough gold!",
+          "§7This slot is visible but §cnot clickable",
+          "§7while the condition is false."
+        ]
+      }
+    },
+
+    {
+      "slot": 31,
+      "item": "minecraft:barrier",
+      "name": "§cClose",
+      "actions": [{ "type": "close" }]
+    }
+  ],
+
+  "progress_bars": [
+    {
+      "start_slot": 10,
+      "length": 7,
+      "value_source": "score:coins",
+      "max_value": 100,
+      "filled_item": "minecraft:lime_stained_glass_pane",
+      "empty_item": "minecraft:gray_stained_glass_pane",
+      "name": "§e2. Coin Progress: {score:coins}/100",
+      "lore": ["§7Fills automatically — recalculated on every refresh."]
+    }
+  ],
+
+  "displays": [
+    {
+      "slot": 22,
+      "item": "minecraft:paper",
+      "name": "§b3. Static Display",
+      "lore": [
+        "§7Player: §f{player}",
+        "§7Coins: §e{score:coins}",
+        "§7This item is read-only — clicking it does nothing."
+      ]
+    },
+    {
+      "slot": 13,
+      "item": "minecraft:golden_apple",
+      "name": "§6VIP Status Active",
+      "lore": ["§7Shown only while you have the vip tag."],
+      "glint": true,
+      "condition": { "type": "has_tag", "value": "vip" }
+    }
+  ]
+}

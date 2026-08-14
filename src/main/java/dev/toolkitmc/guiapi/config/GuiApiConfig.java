@@ -43,6 +43,7 @@ public final class GuiApiConfig {
     private String  chatPrefix           = "§8[§6GuiAPI§8] §f"; // 8. New Config
     private int     soundVolume          = 100;                 // 9. New Config
     private String  commandExecuteMode   = "CHAT";              // 10. New Config
+    private boolean allowGamemodeChange  = true;                // 11. New Config
 
     private GuiApiConfig() {}
 
@@ -92,6 +93,8 @@ public final class GuiApiConfig {
                 soundVolume = Math.clamp(obj.get("sound_volume").getAsInt(), 0, 100);
             if (obj.has("command_execute_mode"))
                 commandExecuteMode = obj.get("command_execute_mode").getAsString();
+            if (obj.has("allow_gamemode_change"))
+                allowGamemodeChange = obj.get("allow_gamemode_change").getAsBoolean();
 
         } catch (IOException e) {
             GuiApiMod.LOGGER.error("[GuiAPI] Failed to load config: {}", e.getMessage());
@@ -117,6 +120,7 @@ public final class GuiApiConfig {
         obj.addProperty("chat_prefix",             chatPrefix);
         obj.addProperty("sound_volume",            soundVolume);
         obj.addProperty("command_execute_mode",    commandExecuteMode);
+        obj.addProperty("allow_gamemode_change",   allowGamemodeChange);
         try {
             Files.writeString(CONFIG_PATH, GSON.toJson(obj));
         } catch (IOException e) {
@@ -174,4 +178,7 @@ public final class GuiApiConfig {
 
     public String getCommandExecuteMode() { return commandExecuteMode; }
     public void setCommandExecuteMode(String v) { commandExecuteMode = v; }
+
+    public boolean isAllowGamemodeChange() { return allowGamemodeChange; }
+    public void setAllowGamemodeChange(boolean v) { allowGamemodeChange = v; }
 }
