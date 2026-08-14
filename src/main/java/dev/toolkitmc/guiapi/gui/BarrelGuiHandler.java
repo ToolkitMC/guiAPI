@@ -460,8 +460,8 @@ public class BarrelGuiHandler {
 
         Identifier filledId = Identifier.tryParse(bar.filledItem());
         Identifier emptyId  = Identifier.tryParse(bar.emptyItem());
-        Identifier defaultFilledId = Identifier.of("minecraft", "lime_stained_glass_pane");
-        Identifier defaultEmptyId  = Identifier.of("minecraft", "gray_stained_glass_pane");
+        Identifier defaultFilledId = Identifier.tryParse("minecraft:lime_stained_glass_pane");
+        Identifier defaultEmptyId  = Identifier.tryParse("minecraft:gray_stained_glass_pane");
         Item filledItem = (filledId != null && BuiltInRegistries.ITEM.containsKey(filledId))
                 ? BuiltInRegistries.ITEM.getValue(filledId) : BuiltInRegistries.ITEM.getValue(defaultFilledId);
         Item emptyItem = (emptyId != null && BuiltInRegistries.ITEM.containsKey(emptyId))
