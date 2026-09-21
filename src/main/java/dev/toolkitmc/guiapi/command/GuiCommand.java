@@ -213,12 +213,13 @@ public class GuiCommand {
                 "  broadcast:<text>              - chat message to every online player\n" +
                 "\n" +
                 "Button JSON fields:\n" +
-                "  slot, page, item, name, lore, glint\n" +
+                "  slot, page, item, name, lore, glint, cooldown (ticks)\n" +
                 "  click_type: any | left | right | shift\n" +
                 "  condition:  has_tag | not_tag | score_gt | score_lt | score_eq\n" +
                 "              var_eq | var_gt | var_lt | var_set\n" +
                 "              has_item | not_item | level_gt | level_lt\n" +
                 "              health_gt | health_lt | food_gt | food_lt\n" +
+                "              gamemode:<mode> | in_dimension:<id>\n" +
                 "              permission:<0-4>   (checks player's command permission level)\n" +
                 "              all | any | not    (combine conditions, see below)\n" +
                 "  actions:    run_command | close | open_gui | message | sound | action_bar\n" +
@@ -227,7 +228,8 @@ public class GuiCommand {
                 "              set_var | add_var | sub_var | reset_var | clear_vars\n" +
                 "              set_score | add_score | sub_score\n" +
                 "              add_effect | remove_effect | clear_effects\n" +
-                "              anvil_input\n" +
+                "              add_tag | remove_tag | broadcast | set_gamemode\n" +
+                "              anvil_input | none\n" +
                 "\n" +
                 "Combining conditions:\n" +
                 "  {\"type\":\"all\", \"conditions\":[ ... ]}   every condition must be true\n" +
@@ -237,6 +239,7 @@ public class GuiCommand {
                 "\n" +
                 "Open gate (top-level GUI JSON fields):\n" +
                 "  open_condition: { ... }   player must meet it to open the GUI\n" +
+                "  open_cost: \"item:amount\"  entrance fee, charged once per open (pages are free)\n" +
                 "  on_deny: [ actions ]      run instead of opening (default: action bar notice)\n" +
                 "\n" +
                 "Conditional item display: add \"else_item\" (same fields as a button)\n" +

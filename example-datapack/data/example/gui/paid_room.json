@@ -1,0 +1,22 @@
+{
+  "title": "§6Paid Room §7(5 gold)",
+  "rows": 3,
+
+  "open_cost": "minecraft:gold_ingot:5",
+  "on_deny": [
+    { "type": "message", "value": "§cThe door costs 5 gold ingots." },
+    { "type": "sound", "value": "minecraft:entity.villager.no" }
+  ],
+
+  "filler": { "item": "minecraft:black_stained_glass_pane", "name": " ", "hide_tooltip": true },
+
+  "buttons": [
+    {
+      "slot": 13,
+      "item": "minecraft:emerald",
+      "name": "§aYou paid, {player}!",
+      "lore": [ "§7Paging inside this GUI never charges again.", "§7Closing and re-opening it does." ],
+      "actions": [ { "type": "close" } ]
+    }
+  ]
+}

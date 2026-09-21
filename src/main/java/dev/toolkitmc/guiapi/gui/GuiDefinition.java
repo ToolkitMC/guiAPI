@@ -323,6 +323,8 @@ public class GuiDefinition {
     private List<StaticDisplayWidget> displays = List.of();
     private Optional<ButtonCondition> openCondition = Optional.empty();
     private List<ButtonAction> onDeny = List.of();
+    /** Raw "itemId:amount" entrance fee, or empty for none ({@code open_cost}). */
+    private String openCost = "";
 
     // ── Constructor ──────────────────────────────────────────────────────────
 
@@ -470,6 +472,7 @@ public class GuiDefinition {
 
         def.openCondition = parseConditionField(obj, "open_condition");
         def.onDeny = parseActionList(obj, "on_deny");
+        def.openCost = obj.has("open_cost") ? obj.get("open_cost").getAsString().trim() : "";
 
         return def;
     }
@@ -760,6 +763,8 @@ public class GuiDefinition {
     public List<StaticDisplayWidget> getDisplays()   { return displays; }
     /** Condition the player must meet to open this GUI, if any ({@code open_condition}). */
     public Optional<ButtonCondition> getOpenCondition() { return openCondition; }
+    /** Entrance fee as {@code "itemId:amount"}; empty string means free ({@code open_cost}). */
+    public String getOpenCost()                      { return openCost; }
     /** Actions run instead of opening when {@link #getOpenCondition()} is false ({@code on_deny}). */
     public List<ButtonAction> getOnDeny()            { return onDeny; }
 

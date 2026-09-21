@@ -41,6 +41,8 @@ public final class GuiApiConfig {
     private boolean enableCloseSound     = true;  // 7. New Config
 
     private String  chatPrefix           = "§8[§6GuiAPI§8] §f"; // 8. New Config
+    // Off by default so existing datapacks keep their exact message output.
+    private boolean chatPrefixEnabled    = false;
     private int     soundVolume          = 100;                 // 9. New Config
     private String  commandExecuteMode   = "CHAT";              // 10. New Config
     private boolean allowGamemodeChange  = true;                // 11. New Config
@@ -89,6 +91,8 @@ public final class GuiApiConfig {
                 enableCloseSound = obj.get("enable_close_sound").getAsBoolean();
             if (obj.has("chat_prefix"))
                 chatPrefix = obj.get("chat_prefix").getAsString();
+            if (obj.has("chat_prefix_enabled"))
+                chatPrefixEnabled = obj.get("chat_prefix_enabled").getAsBoolean();
             if (obj.has("sound_volume"))
                 soundVolume = Math.clamp(obj.get("sound_volume").getAsInt(), 0, 100);
             if (obj.has("command_execute_mode"))
@@ -118,6 +122,7 @@ public final class GuiApiConfig {
         obj.addProperty("mute_click_errors",      muteClickErrors);
         obj.addProperty("enable_close_sound",     enableCloseSound);
         obj.addProperty("chat_prefix",             chatPrefix);
+        obj.addProperty("chat_prefix_enabled",     chatPrefixEnabled);
         obj.addProperty("sound_volume",            soundVolume);
         obj.addProperty("command_execute_mode",    commandExecuteMode);
         obj.addProperty("allow_gamemode_change",   allowGamemodeChange);
@@ -169,6 +174,9 @@ public final class GuiApiConfig {
 
     public boolean isEnableCloseSound() { return enableCloseSound; }
     public void setEnableCloseSound(boolean v) { enableCloseSound = v; }
+
+    public boolean isChatPrefixEnabled() { return chatPrefixEnabled; }
+    public void setChatPrefixEnabled(boolean v) { chatPrefixEnabled = v; }
 
     public String getChatPrefix() { return chatPrefix; }
     public void setChatPrefix(String v) { chatPrefix = v; }

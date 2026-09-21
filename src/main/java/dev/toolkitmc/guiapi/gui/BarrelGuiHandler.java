@@ -88,6 +88,14 @@ public class BarrelGuiHandler {
             GuiApiMod.LOGGER.info("[GuiAPI|Debug] " + msg, args);
     }
 
+    /** Applies the configured chat prefix to a chat (non-action-bar) message. */
+    private static Component prefixed(String text) {
+        var cfg = dev.toolkitmc.guiapi.config.GuiApiConfig.INSTANCE;
+        if (!cfg.isChatPrefixEnabled()) return Component.literal(text);
+        String prefix = cfg.getChatPrefix();
+        return Component.literal((prefix == null ? "" : prefix) + text);
+    }
+
     // ── Public API ───────────────────────────────────────────────────────────
 
     public static void open(ServerPlayer player, GuiDefinition def) {
@@ -109,16 +117,54 @@ public class BarrelGuiHandler {
      */
     private static int denyDepth = 0;
 
+    /**
+     * Opens a GUI from outside it (command, item, open_gui action). Enforces the
+     * open_condition gate and charges open_cost.
+     */
     public static void open(ServerPlayer player, GuiDefinition def, int page) {
+        openInternal(player, def, page, true);
+    }
+
+    /**
+     * Same GUI, different page (next/prev/goto, anvil return). Re-opens the
+     * container but must NOT charge open_cost again — the player already paid
+     * to be here. The open_condition gate is still re-checked.
+     */
+    private static void reopen(ServerPlayer player, GuiDefinition def, int page) {
+        openInternal(player, def, page, false);
+    }
+
+    /** "minecraft:gold_ingot:5" → "5x gold_ingot" for player-facing text. */
+    private static String describeCost(String rawCost) {
+        ItemSpec spec = ItemSpec.parse(rawCost, 1);
+        String id = spec.itemId();
+        int colon = id.indexOf(':');
+        return Math.max(1, spec.amount()) + "x " + (colon >= 0 ? id.substring(colon + 1) : id);
+    }
+
+    /** Whether {@code def.open_cost} can be paid right now (true when free). */
+    private static boolean canAffordOpenCost(ServerPlayer player, GuiDefinition def) {
+        if (def.getOpenCost().isEmpty()) return true;
+        ItemSpec spec = ItemSpec.parse(def.getOpenCost(), 1);
+        return hasItemCount(player, spec.itemId(), Math.max(1, spec.amount()));
+    }
+
+    private static void openInternal(ServerPlayer player, GuiDefinition def, int page, boolean chargeCost) {
+        boolean gateClosed = def.getOpenCondition().isPresent()
+                && !evaluateCondition(player, def.getOpenCondition().get());
+        boolean cannotPay = !gateClosed && chargeCost && !canAffordOpenCost(player, def);
         // open_condition gate — checked before any state is registered or any inventory is built.
-        if (def.getOpenCondition().isPresent() && !evaluateCondition(player, def.getOpenCondition().get())) {
+        if (gateClosed || cannotPay) {
             debug("open denied: player={} gui={}", player.getScoreboardName(), def.getId());
             if (denyDepth >= 3) {
                 GuiApiMod.LOGGER.warn("[GuiAPI] on_deny of {} keeps re-opening a denied GUI — stopping.", def.getId());
                 return;
             }
             if (def.getOnDeny().isEmpty()) {
-                player.sendSystemMessage(Component.literal("§cYou cannot open this menu."), true);
+                String msg = cannotPay
+                        ? "§cYou need " + describeCost(def.getOpenCost()) + " to open this menu."
+                        : "§cYou cannot open this menu.";
+                player.sendSystemMessage(Component.literal(msg), true);
                 return;
             }
             denyDepth++;
@@ -128,6 +174,12 @@ public class BarrelGuiHandler {
                 denyDepth--;
             }
             return;
+        }
+
+        if (chargeCost && !def.getOpenCost().isEmpty()) {
+            ItemSpec spec = ItemSpec.parse(def.getOpenCost(), 1);
+            takeItemCount(player, spec.itemId(), Math.max(1, spec.amount()));
+            debug("open_cost charged: player={} gui={} cost={}", player.getScoreboardName(), def.getId(), def.getOpenCost());
         }
 
         page = Math.clamp(page, 0, def.getPageCount() - 1);
@@ -846,10 +898,8 @@ public class BarrelGuiHandler {
                 yield current.getName().equalsIgnoreCase(cond.value().trim());
             }
             // IN_DIMENSION — value is a dimension id, e.g. minecraft:the_nether
-            case IN_DIMENSION -> {
-                Identifier dimId = Identifier.tryParse(cond.value().trim());
-                yield dimId != null && player.level().dimension().toString().equals(dimId.toString());
-            }
+            case IN_DIMENSION ->
+                DimensionUtil.matches(player.level().dimension().toString(), cond.value());
         };
     }
 
@@ -994,7 +1044,7 @@ public class BarrelGuiHandler {
                     GuiVarStore.INSTANCE.set(sp.getUUID(), varKey, text);
                     GuiInputStore.INSTANCE.set(sp.getUUID(), text);
                     dev.toolkitmc.guiapi.loader.GuiRegistry.INSTANCE.get(previousGuiId)
-                            .ifPresent(target -> open(sp, target, previousPage));
+                            .ifPresent(target -> { if (target == def) reopen(sp, target, previousPage); else open(sp, target, previousPage); });
                 });
             }
             case RUN_FUNCTION -> {
@@ -1069,7 +1119,7 @@ public class BarrelGuiHandler {
                             .ifPresentOrElse(
                                     target -> open(player, target),
                                     () -> player.sendSystemMessage(
-                                            Component.literal("[GuiAPI] GUI not found: " + targetId), false));
+                                            prefixed("[GuiAPI] GUI not found: " + targetId), false));
                 }
                 return true;
             }
@@ -1077,7 +1127,7 @@ public class BarrelGuiHandler {
                 String msgVal = resolve(action.value(), player, def, currentPage);
                 String mode = dev.toolkitmc.guiapi.config.GuiApiConfig.INSTANCE.getCommandExecuteMode();
                 if ("CHAT".equalsIgnoreCase(mode)) {
-                    player.sendSystemMessage(Component.literal(msgVal), false);
+                    player.sendSystemMessage(prefixed(msgVal), false);
                 } else if ("SYSTEM".equalsIgnoreCase(mode)) {
                     player.sendSystemMessage(Component.literal(msgVal), true);
                 }
@@ -1087,7 +1137,7 @@ public class BarrelGuiHandler {
                 if (next < def.getPageCount()) {
                     navigateAway(player);
                     player.closeContainer();
-                    open(player, def, next);
+                    reopen(player, def, next);
                 }
                 return true;
             }
@@ -1096,7 +1146,7 @@ public class BarrelGuiHandler {
                 if (prev >= 0) {
                     navigateAway(player);
                     player.closeContainer();
-                    open(player, def, prev);
+                    reopen(player, def, prev);
                 }
                 return true;
             }
@@ -1136,7 +1186,7 @@ public class BarrelGuiHandler {
                     if (target >= 0 && target < def.getPageCount()) {
                         navigateAway(player);
                         player.closeContainer();
-                        open(player, def, target);
+                        reopen(player, def, target);
                     }
                 } catch (NumberFormatException ignored) {}
                 return true;
@@ -1190,7 +1240,7 @@ public class BarrelGuiHandler {
             case BROADCAST -> {
                 String text = resolve(action.value(), player, def, currentPage);
                 if (!text.isEmpty()) {
-                    Component broadcast = Component.literal(text);
+                    Component broadcast = prefixed(text);
                     for (ServerPlayer recipient : server.getPlayerList().getPlayers()) {
                         recipient.sendSystemMessage(broadcast, false);
                     }
