@@ -10,6 +10,11 @@ import static org.junit.jupiter.api.Assertions.*;
 /**
  * parse → serialize → parse must be lossless. Needs the Minecraft classpath
  * (Identifier), so it only runs under Gradle/CI.
+ *
+ * NOTE: SRC deliberately sets "tick_rate". GuiDefinition.parse() falls back to
+ * GuiApiConfig.INSTANCE.getDefaultTickRate() only when it is absent, and
+ * GuiApiConfig's static init calls FabricLoader.getInstance(), which does not
+ * exist in a plain unit-test JVM. Do not remove "tick_rate" from SRC.
  */
 class GuiSerializerRoundTripTest {
 

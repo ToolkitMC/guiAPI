@@ -43,6 +43,9 @@ dependencies {
 
     testImplementation 'org.junit.jupiter:junit-jupiter-api:5.10.2'
     testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.10.2'
+    // Gradle 9+ no longer bundles the launcher; it must be on the test runtime classpath.
+    // Version must match the Jupiter line above (Jupiter 5.10.x <-> Platform 1.10.x).
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher:1.10.2'
 }
 
 test {
