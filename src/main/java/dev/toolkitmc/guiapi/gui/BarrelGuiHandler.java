@@ -88,6 +88,14 @@ public class BarrelGuiHandler {
             GuiApiMod.LOGGER.info("[GuiAPI|Debug] " + msg, args);
     }
 
+    /** Applies the configured chat prefix to a chat (non-action-bar) message. */
+    private static Component prefixed(String text) {
+        var cfg = dev.toolkitmc.guiapi.config.GuiApiConfig.INSTANCE;
+        if (!cfg.isChatPrefixEnabled()) return Component.literal(text);
+        String prefix = cfg.getChatPrefix();
+        return Component.literal((prefix == null ? "" : prefix) + text);
+    }
+
     // ── Public API ───────────────────────────────────────────────────────────
 
     public static void open(ServerPlayer player, GuiDefinition def) {
@@ -103,7 +111,77 @@ public class BarrelGuiHandler {
         return inv;
     }
 
+    /**
+     * Depth of on_deny chains currently executing. An on_deny that (directly or via
+     * another GUI) re-opens a GUI whose gate is still closed would recurse forever.
+     */
+    private static int denyDepth = 0;
+
+    /**
+     * Opens a GUI from outside it (command, item, open_gui action). Enforces the
+     * open_condition gate and charges open_cost.
+     */
     public static void open(ServerPlayer player, GuiDefinition def, int page) {
+        openInternal(player, def, page, true);
+    }
+
+    /**
+     * Same GUI, different page (next/prev/goto, anvil return). Re-opens the
+     * container but must NOT charge open_cost again — the player already paid
+     * to be here. The open_condition gate is still re-checked.
+     */
+    private static void reopen(ServerPlayer player, GuiDefinition def, int page) {
+        openInternal(player, def, page, false);
+    }
+
+    /** "minecraft:gold_ingot:5" → "5x gold_ingot" for player-facing text. */
+    private static String describeCost(String rawCost) {
+        ItemSpec spec = ItemSpec.parse(rawCost, 1);
+        String id = spec.itemId();
+        int colon = id.indexOf(':');
+        return Math.max(1, spec.amount()) + "x " + (colon >= 0 ? id.substring(colon + 1) : id);
+    }
+
+    /** Whether {@code def.open_cost} can be paid right now (true when free). */
+    private static boolean canAffordOpenCost(ServerPlayer player, GuiDefinition def) {
+        if (def.getOpenCost().isEmpty()) return true;
+        ItemSpec spec = ItemSpec.parse(def.getOpenCost(), 1);
+        return hasItemCount(player, spec.itemId(), Math.max(1, spec.amount()));
+    }
+
+    private static void openInternal(ServerPlayer player, GuiDefinition def, int page, boolean chargeCost) {
+        boolean gateClosed = def.getOpenCondition().isPresent()
+                && !evaluateCondition(player, def.getOpenCondition().get());
+        boolean cannotPay = !gateClosed && chargeCost && !canAffordOpenCost(player, def);
+        // open_condition gate — checked before any state is registered or any inventory is built.
+        if (gateClosed || cannotPay) {
+            debug("open denied: player={} gui={}", player.getScoreboardName(), def.getId());
+            if (denyDepth >= 3) {
+                GuiApiMod.LOGGER.warn("[GuiAPI] on_deny of {} keeps re-opening a denied GUI — stopping.", def.getId());
+                return;
+            }
+            if (def.getOnDeny().isEmpty()) {
+                String msg = cannotPay
+                        ? "§cYou need " + describeCost(def.getOpenCost()) + " to open this menu."
+                        : "§cYou cannot open this menu.";
+                player.sendSystemMessage(Component.literal(msg), true);
+                return;
+            }
+            denyDepth++;
+            try {
+                executeDelayedActionChain(player, def, page, def.getOnDeny(), 0, false);
+            } finally {
+                denyDepth--;
+            }
+            return;
+        }
+
+        if (chargeCost && !def.getOpenCost().isEmpty()) {
+            ItemSpec spec = ItemSpec.parse(def.getOpenCost(), 1);
+            takeItemCount(player, spec.itemId(), Math.max(1, spec.amount()));
+            debug("open_cost charged: player={} gui={} cost={}", player.getScoreboardName(), def.getId(), def.getOpenCost());
+        }
+
         page = Math.clamp(page, 0, def.getPageCount() - 1);
         int rows = Math.clamp(def.getRows(), 1, 6);
         int finalPage = page;
@@ -430,13 +508,7 @@ public class BarrelGuiHandler {
     }
 
     private static boolean evaluateStaticCondition(ServerPlayer player, GuiDefinition.ButtonCondition cond) {
-        // Reuses the same condition logic as buttons by wrapping into a throwaway
-        // Button-shaped evaluation — avoids duplicating the switch in evaluateCondition.
-        GuiDefinition.Button fake = new GuiDefinition.Button(
-                0, 0, "", "", List.of(), false, GuiDefinition.ClickType.ANY,
-                Optional.of(cond), List.of(), Optional.empty(), Optional.empty(), Optional.empty(),
-                "1", false, false, Optional.empty(), 0);
-        return evaluateCondition(player, fake);
+        return evaluateCondition(player, cond);
     }
 
     private static int readWidgetValue(ServerPlayer player, String valueSource) {
@@ -700,26 +772,33 @@ public class BarrelGuiHandler {
         text = text.replace("{page1}",  String.valueOf(page + 1));
         text = text.replace("{pages}",  String.valueOf(def.getPageCount()));
         text = text.replace("{xp}",     String.valueOf(player.experienceLevel));
-        text = text.replace("{input}",  GuiInputStore.INSTANCE.get(player.getUUID()));
 
-        // {score:objective}
-        int idx;
-        while ((idx = text.indexOf("{score:")) >= 0) {
-            int end = text.indexOf('}', idx);
-            if (end < 0) break;
-            String obj = text.substring(idx + 7, end);
-            int score = getScore(player, obj);
-            text = text.substring(0, idx) + score + text.substring(end + 1);
-        }
+        // Player state placeholders
+        if (text.contains("{health}"))
+            text = text.replace("{health}",     String.valueOf((int) Math.ceil(player.getHealth())));
+        if (text.contains("{max_health}"))
+            text = text.replace("{max_health}", String.valueOf((int) Math.ceil(player.getMaxHealth())));
+        if (text.contains("{food}"))
+            text = text.replace("{food}",       String.valueOf(player.getFoodData().getFoodLevel()));
+        if (text.contains("{pos_x}"))
+            text = text.replace("{pos_x}",      String.valueOf(player.blockPosition().getX()));
+        if (text.contains("{pos_y}"))
+            text = text.replace("{pos_y}",      String.valueOf(player.blockPosition().getY()));
+        if (text.contains("{pos_z}"))
+            text = text.replace("{pos_z}",      String.valueOf(player.blockPosition().getZ()));
+        if (text.contains("{online}"))
+            text = text.replace("{online}",     String.valueOf(player.level().getServer().getPlayerList().getPlayers().size()));
 
-        // {var:key}
-        while ((idx = text.indexOf("{var:")) >= 0) {
-            int end = text.indexOf('}', idx);
-            if (end < 0) break;
-            String key = text.substring(idx + 5, end);
-            String val = GuiVarStore.INSTANCE.getOrDefault(player.getUUID(), key, "");
-            text = text.substring(0, idx) + val + text.substring(end + 1);
-        }
+        // Anvil input is player-typed, so its braces are masked: it must never be
+        // re-read as {var:..}/{score:..} below (and is restored at the end).
+        text = text.replace("{input}",  PlaceholderUtil.escapeBraces(GuiInputStore.INSTANCE.get(player.getUUID())));
+
+        // {score:objective} and {var:key} — inserted values are never re-scanned
+        text = PlaceholderUtil.replaceTokens(text, "{score:", obj -> String.valueOf(getScore(player, obj)));
+        text = PlaceholderUtil.replaceTokens(text, "{var:",
+                key -> GuiVarStore.INSTANCE.getOrDefault(player.getUUID(), key, ""));
+
+        text = PlaceholderUtil.unescapeBraces(text);
 
         debug("resolve: \"{}\" → \"{}\"", text.length() > 60 ? text.substring(0, 60) + "..." : text, text);
         return text;
@@ -743,9 +822,18 @@ public class BarrelGuiHandler {
 
     static boolean evaluateCondition(ServerPlayer player, GuiDefinition.Button btn) {
         if (btn.condition().isEmpty()) return true;
+        return evaluateCondition(player, btn.condition().get());
+    }
 
-        GuiDefinition.ButtonCondition cond = btn.condition().get();
+    /** Evaluates a condition tree — all / any / not are composed by {@link ConditionLogic}. */
+    static boolean evaluateCondition(ServerPlayer player, GuiDefinition.ButtonCondition cond) {
+        return ConditionLogic.evaluate(cond, leaf -> evaluateLeafCondition(player, leaf));
+    }
+
+    private static boolean evaluateLeafCondition(ServerPlayer player, GuiDefinition.ButtonCondition cond) {
         return switch (cond.type()) {
+            // Composite types are resolved by ConditionLogic before a leaf is ever evaluated.
+            case ALL, ANY, NOT -> false;
             case HAS_TAG  -> player.entityTags().contains(cond.value());
             case NOT_TAG  -> !player.entityTags().contains(cond.value());
             case SCORE_GT -> getScore(player, cond.value().split(":", 2), 0) >
@@ -810,10 +898,8 @@ public class BarrelGuiHandler {
                 yield current.getName().equalsIgnoreCase(cond.value().trim());
             }
             // IN_DIMENSION — value is a dimension id, e.g. minecraft:the_nether
-            case IN_DIMENSION -> {
-                Identifier dimId = Identifier.tryParse(cond.value().trim());
-                yield dimId != null && player.level().dimension().toString().equals(dimId.toString());
-            }
+            case IN_DIMENSION ->
+                DimensionUtil.matches(player.level().dimension().toString(), cond.value());
         };
     }
 
@@ -909,6 +995,11 @@ public class BarrelGuiHandler {
         MinecraftServer server = player.level().getServer();
         debug("action: player={} type={} value=\"{}\"",
                 player.getScoreboardName(), action.type(), action.value());
+        // Optional per-action condition: a false condition skips only this action.
+        if (action.condition().isPresent() && !evaluateCondition(player, action.condition().get())) {
+            debug("action skipped (condition false): type={}", action.type());
+            return false;
+        }
         switch (action.type()) {
             case RUN_COMMAND -> {
                 String cmd = action.value().startsWith("/")
@@ -953,7 +1044,7 @@ public class BarrelGuiHandler {
                     GuiVarStore.INSTANCE.set(sp.getUUID(), varKey, text);
                     GuiInputStore.INSTANCE.set(sp.getUUID(), text);
                     dev.toolkitmc.guiapi.loader.GuiRegistry.INSTANCE.get(previousGuiId)
-                            .ifPresent(target -> open(sp, target, previousPage));
+                            .ifPresent(target -> { if (target == def) reopen(sp, target, previousPage); else open(sp, target, previousPage); });
                 });
             }
             case RUN_FUNCTION -> {
@@ -1028,7 +1119,7 @@ public class BarrelGuiHandler {
                             .ifPresentOrElse(
                                     target -> open(player, target),
                                     () -> player.sendSystemMessage(
-                                            Component.literal("[GuiAPI] GUI not found: " + targetId), false));
+                                            prefixed("[GuiAPI] GUI not found: " + targetId), false));
                 }
                 return true;
             }
@@ -1036,7 +1127,7 @@ public class BarrelGuiHandler {
                 String msgVal = resolve(action.value(), player, def, currentPage);
                 String mode = dev.toolkitmc.guiapi.config.GuiApiConfig.INSTANCE.getCommandExecuteMode();
                 if ("CHAT".equalsIgnoreCase(mode)) {
-                    player.sendSystemMessage(Component.literal(msgVal), false);
+                    player.sendSystemMessage(prefixed(msgVal), false);
                 } else if ("SYSTEM".equalsIgnoreCase(mode)) {
                     player.sendSystemMessage(Component.literal(msgVal), true);
                 }
@@ -1046,7 +1137,7 @@ public class BarrelGuiHandler {
                 if (next < def.getPageCount()) {
                     navigateAway(player);
                     player.closeContainer();
-                    open(player, def, next);
+                    reopen(player, def, next);
                 }
                 return true;
             }
@@ -1055,7 +1146,7 @@ public class BarrelGuiHandler {
                 if (prev >= 0) {
                     navigateAway(player);
                     player.closeContainer();
-                    open(player, def, prev);
+                    reopen(player, def, prev);
                 }
                 return true;
             }
@@ -1095,7 +1186,7 @@ public class BarrelGuiHandler {
                     if (target >= 0 && target < def.getPageCount()) {
                         navigateAway(player);
                         player.closeContainer();
-                        open(player, def, target);
+                        reopen(player, def, target);
                     }
                 } catch (NumberFormatException ignored) {}
                 return true;
@@ -1130,18 +1221,30 @@ public class BarrelGuiHandler {
             case CLEAR_VARS -> GuiVarStore.INSTANCE.clear(player.getUUID());
             case REFRESH -> refreshCurrentGui(player);
             case TAKE_ITEM -> {
-                String resolved = resolve(action.value(), player, def, currentPage);
-                String[] parts = resolved.split(":", 2);
-                String itemId = parts[0];
-                int amount = parts.length > 1 ? parseIntSafe(parts[1]) : 1;
-                takeItemCount(player, itemId, amount);
+                // "minecraft:gold_nugget:5" — the amount is the part after the LAST colon.
+                ItemSpec spec = ItemSpec.parse(resolve(action.value(), player, def, currentPage), 1);
+                takeItemCount(player, spec.itemId(), Math.max(0, spec.amount()));
             }
             case GIVE_ITEM -> {
-                String resolved = resolve(action.value(), player, def, currentPage);
-                String[] parts = resolved.split(":", 2);
-                String itemId = parts[0];
-                int amount = parts.length > 1 ? Math.max(1, parseIntSafe(parts[1])) : 1;
-                giveItemCount(player, itemId, amount);
+                ItemSpec spec = ItemSpec.parse(resolve(action.value(), player, def, currentPage), 1);
+                giveItemCount(player, spec.itemId(), Math.max(1, spec.amount()));
+            }
+            case ADD_TAG -> {
+                String tag = resolve(action.value(), player, def, currentPage).trim();
+                if (!tag.isEmpty()) player.addTag(tag);
+            }
+            case REMOVE_TAG -> {
+                String tag = resolve(action.value(), player, def, currentPage).trim();
+                if (!tag.isEmpty()) player.removeTag(tag);
+            }
+            case BROADCAST -> {
+                String text = resolve(action.value(), player, def, currentPage);
+                if (!text.isEmpty()) {
+                    Component broadcast = prefixed(text);
+                    for (ServerPlayer recipient : server.getPlayerList().getPlayers()) {
+                        recipient.sendSystemMessage(broadcast, false);
+                    }
+                }
             }
             case ADD_XP -> {
                 String resolved = resolve(action.value(), player, def, currentPage);

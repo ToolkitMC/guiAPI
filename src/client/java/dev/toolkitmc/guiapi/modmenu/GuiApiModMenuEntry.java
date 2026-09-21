@@ -115,10 +115,16 @@ public class GuiApiModMenuEntry implements ModMenuApi {
                 .setTooltip(Component.literal("Play a clean chest close sound when closing virtual GUIs."))
                 .build());
 
+            otherCategory.addEntry(entryBuilder.startBooleanToggle(Component.literal("Enable Chat Prefix"), cfg.isChatPrefixEnabled())
+                .setDefaultValue(false)
+                .setSaveConsumer(cfg::setChatPrefixEnabled)
+                .setTooltip(Component.literal("Prepend the chat prefix to message/broadcast actions. Off by default so existing datapacks are unchanged."))
+                .build());
+
             otherCategory.addEntry(entryBuilder.startTextField(Component.literal("Chat Prefix"), cfg.getChatPrefix())
                 .setDefaultValue("§8[§6GuiAPI§8] §f")
                 .setSaveConsumer(cfg::setChatPrefix)
-                .setTooltip(Component.literal("Custom prefix for all chat messages sent by GuiAPI."))
+                .setTooltip(Component.literal("Prefix text used when 'Enable Chat Prefix' is on. Applies to chat messages, not the action bar."))
                 .build());
 
             otherCategory.addEntry(entryBuilder.startIntSlider(Component.literal("Sound Volume (%)"), cfg.getSoundVolume(), 0, 100)

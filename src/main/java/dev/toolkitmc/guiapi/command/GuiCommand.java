@@ -193,6 +193,8 @@ public class GuiCommand {
                 "Variable placeholder: {var:key}\n" +
                 "Input placeholder: {input}   (last anvil input)\n" +
                 "XP placeholder:    {xp}      (player experience level)\n" +
+                "State placeholders: {health} {max_health} {food} {online}\n" +
+                "                    {pos_x} {pos_y} {pos_z}   (block position)\n" +
                 "\n" +
                 "Macro functions: define reusable action blocks in JSON with \"macros\": {}\n" +
                 "  actions: run_function:<macro_name>\n" +
@@ -207,22 +209,38 @@ public class GuiCommand {
                 "  take_item:<itemId>:<amount>   - remove item(s) from inventory\n" +
                 "  add_xp:<n>                    - add n XP points\n" +
                 "  add_xp:L<n>                   - add n XP levels (prefix with L)\n" +
+                "  add_tag:<tag> | remove_tag:<tag> - change a scoreboard tag (no console needed)\n" +
+                "  broadcast:<text>              - chat message to every online player\n" +
                 "\n" +
                 "Button JSON fields:\n" +
-                "  slot, page, item, name, lore, glint\n" +
+                "  slot, page, item, name, lore, glint, cooldown (ticks)\n" +
                 "  click_type: any | left | right | shift\n" +
                 "  condition:  has_tag | not_tag | score_gt | score_lt | score_eq\n" +
                 "              var_eq | var_gt | var_lt | var_set\n" +
                 "              has_item | not_item | level_gt | level_lt\n" +
                 "              health_gt | health_lt | food_gt | food_lt\n" +
+                "              gamemode:<mode> | in_dimension:<id>\n" +
                 "              permission:<0-4>   (checks player's command permission level)\n" +
+                "              all | any | not    (combine conditions, see below)\n" +
                 "  actions:    run_command | close | open_gui | message | sound | action_bar\n" +
                 "              next_page | prev_page | goto_page | run_function\n" +
                 "              run_random_function | give_item | take_item | add_xp\n" +
                 "              set_var | add_var | sub_var | reset_var | clear_vars\n" +
                 "              set_score | add_score | sub_score\n" +
                 "              add_effect | remove_effect | clear_effects\n" +
-                "              anvil_input\n" +
+                "              add_tag | remove_tag | broadcast | set_gamemode\n" +
+                "              anvil_input | none\n" +
+                "\n" +
+                "Combining conditions:\n" +
+                "  {\"type\":\"all\", \"conditions\":[ ... ]}   every condition must be true\n" +
+                "  {\"type\":\"any\", \"conditions\":[ ... ]}   at least one must be true\n" +
+                "  {\"type\":\"not\", \"condition\":{ ... }}    negates one condition\n" +
+                "  Actions accept an optional \"condition\" too; a false one skips just that action.\n" +
+                "\n" +
+                "Open gate (top-level GUI JSON fields):\n" +
+                "  open_condition: { ... }   player must meet it to open the GUI\n" +
+                "  open_cost: \"item:amount\"  entrance fee, charged once per open (pages are free)\n" +
+                "  on_deny: [ actions ]      run instead of opening (default: action bar notice)\n" +
                 "\n" +
                 "Conditional item display: add \"else_item\" (same fields as a button)\n" +
                 "  alongside \"condition\" to show an alternate item instead of hiding\n" +
