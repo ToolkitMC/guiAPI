@@ -1,0 +1,131 @@
+{
+  "title": "§6Gates & Logic Demo",
+  "rows": 3,
+  "tick_rate": 20,
+
+  "open_condition": {
+    "type": "not",
+    "condition": { "type": "has_tag", "value": "guiapi_demo_locked" }
+  },
+  "on_deny": [
+    { "type": "message", "value": "§cThis demo is locked for you. Unlock with: /tag @s remove guiapi_demo_locked" },
+    { "type": "sound", "value": "minecraft:entity.villager.no" }
+  ],
+
+  "filler": {
+    "item": "minecraft:black_stained_glass_pane",
+    "name": " ",
+    "hide_tooltip": true
+  },
+
+  "buttons": [
+    {
+      "slot": 10,
+      "item": "minecraft:emerald",
+      "name": "§a1. any / all conditions",
+      "lore": [
+        "§7Unlocked for VIPs (tag §fvip§7) or anyone",
+        "§7with an XP level above 9 — and never for",
+        "§7players tagged §fbanned§7.",
+        "§8Try: /tag @s add vip"
+      ],
+      "condition": {
+        "type": "all",
+        "conditions": [
+          { "type": "not", "condition": { "type": "has_tag", "value": "banned" } },
+          { "type": "any", "conditions": [
+              { "type": "has_tag", "value": "vip" },
+              { "type": "level_gt", "value": "9" }
+          ] }
+        ]
+      },
+      "actions": [
+        { "type": "sound", "value": "minecraft:entity.player.levelup" },
+        { "type": "message", "value": "§aAccess granted, {player}!" }
+      ],
+      "else_item": {
+        "item": "minecraft:barrier",
+        "name": "§c1. any / all conditions §7(Locked)",
+        "lore": [ "§7Needs the §fvip §7tag or XP level 10+." ]
+      }
+    },
+
+    {
+      "slot": 12,
+      "item": "minecraft:name_tag",
+      "name": "§e2. Conditional actions + tags",
+      "lore": [
+        "§7One click runs a chain where each step",
+        "§7can have its own condition:",
+        "§7 • §fadd_tag §7/ §fremove_tag §7need no console",
+        "§7 • §fbroadcast §7talks to the whole server",
+        "§7 • the VIP line only shows for §fvip §7players"
+      ],
+      "actions": [
+        { "type": "add_tag", "value": "guiapi_demo_seen" },
+        { "type": "message", "value": "§7You clicked the demo button." },
+        {
+          "type": "message",
+          "value": "§6VIP bonus: thanks for supporting the server!",
+          "condition": { "type": "has_tag", "value": "vip" }
+        },
+        {
+          "type": "broadcast",
+          "value": "§e{player} §7({health}/{max_health} HP) is playing with GUI API — {online} online.",
+          "condition": { "type": "has_tag", "value": "vip" }
+        },
+        { "type": "refresh" }
+      ]
+    },
+
+    {
+      "slot": 14,
+      "toggle": {
+        "tag": "guiapi_demo_seen",
+        "item_on": "minecraft:lime_dye",
+        "item_off": "minecraft:gray_dye",
+        "name_on": "§a3. Tag guiapi_demo_seen: ON",
+        "name_off": "§73. Tag guiapi_demo_seen: OFF",
+        "lore_on": [ "§7Click to switch it off." ],
+        "lore_off": [ "§7Click to switch it on." ]
+      }
+    },
+
+    {
+      "slot": 16,
+      "item": "minecraft:iron_door",
+      "name": "§c4. Lock me out (open gate)",
+      "lore": [
+        "§7Tags you with §fguiapi_demo_locked§7.",
+        "§7Reopening this GUI is then denied by",
+        "§7its §fopen_condition§7 and §fon_deny §7runs.",
+        "§8Undo: /tag @s remove guiapi_demo_locked"
+      ],
+      "actions": [
+        { "type": "add_tag", "value": "guiapi_demo_locked" },
+        { "type": "close" }
+      ]
+    },
+
+    {
+      "slot": 22,
+      "item": "minecraft:barrier",
+      "name": "§cClose",
+      "actions": [ { "type": "close" } ]
+    }
+  ],
+
+  "displays": [
+    {
+      "slot": 4,
+      "item": "minecraft:player_head",
+      "name": "§b5. New placeholders",
+      "lore": [
+        "§7Health: §c{health}§7/§c{max_health}",
+        "§7Food: §6{food}",
+        "§7Block: §f{pos_x} {pos_y} {pos_z}",
+        "§7Players online: §a{online}"
+      ]
+    }
+  ]
+}

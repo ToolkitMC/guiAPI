@@ -58,6 +58,8 @@ The GUI ID used in commands is `<namespace>:<name>` — matching the file path u
 | `filler` | object | — | Background filler configuration (see below). |
 | `on_open` | action[] | `[]` | Actions executed when the GUI is opened. |
 | `on_close` | action[] | `[]` | Actions executed when the GUI is closed (any reason). |
+| `open_condition` | condition | — | Player must meet this condition to open the GUI (see [Open gate](#open-gate)). |
+| `on_deny` | action[] | `[]` | Actions executed instead of opening when `open_condition` is false. Empty = short action-bar notice. |
 | `buttons` | button[] | `[]` | List of button definitions. |
 
 #### Filler fields
@@ -108,12 +110,26 @@ Supported in `title`, button `name`, `lore`, `message` values, and `run_command`
 | `{pages}` | Total page count |
 | `{score:objective}` | Player's score in the given scoreboard objective |
 | `{var:key}` | Player's runtime variable `key` (empty string if unset) |
+| `{xp}` | Player's experience level |
+| `{input}` | Last text entered through an `anvil_input` action |
+| `{health}` / `{max_health}` | Current / maximum health in half-hearts, rounded up |
+| `{food}` | Hunger level (0–20) |
+| `{online}` | Number of players currently online |
+| `{pos_x}` `{pos_y}` `{pos_z}` | Player's block coordinates |
+
+Text inserted by `{var:key}` and `{input}` is treated as plain text — it is never scanned for further placeholders.
 
 ---
 
 ## Action types
 
 Any action can be delayed by adding `"delay": int` (in ticks) to its JSON block.
+
+Any action can also carry a `"condition"` (same format as button conditions, including `all` / `any` / `not`). It is checked right when the action is about to run — after its delay — and a false condition skips just that action while the rest of the chain continues:
+
+```json
+{ "type": "message", "value": "§6VIP bonus applied!", "condition": { "type": "has_tag", "value": "vip" } }
+```
 
 | Type | `value` format | `run_with` | Description |
 |------|--------------|------------|-------------|
@@ -136,6 +152,9 @@ Any action can be delayed by adding `"delay": int` (in ticks) to its JSON block.
 | `sub_var` | Integer to subtract | — | Subtract an integer from a runtime variable. Requires `"var": "key"`. |
 | `reset_var` | — | — | Delete a single runtime variable. Requires `"var": "key"`. |
 | `clear_vars` | — | — | Delete all runtime variables for this player. |
+| `add_tag` | Tag name | — | Add a scoreboard tag to the player (no `run_with: console` needed). Supports placeholders. |
+| `remove_tag` | Tag name | — | Remove a scoreboard tag from the player. |
+| `broadcast` | Text string | — | Send a chat message to every online player. Supports placeholders. |
 | `next_page` | — | — | Go to the next page. |
 | `prev_page` | — | — | Go to the previous page. |
 | `goto_page` | Page index (string) | — | Jump to a specific page. |
@@ -165,6 +184,41 @@ Conditions control button **visibility**. Hidden buttons cannot be clicked.
 | `health_lt` | `value` | Player's current health < value |
 | `food_gt` | `value` | Player's hunger level > value |
 | `food_lt` | `value` | Player's hunger level < value |
+| `all` | `"conditions": [ … ]` | **Every** listed condition is true (empty list = true) |
+| `any` | `"conditions": [ … ]` | **At least one** listed condition is true (empty list = false) |
+| `not` | `"condition": { … }` | The nested condition is **not** true (no nested condition = false) |
+
+Composite conditions can be nested (up to 8 levels) and work everywhere a condition does — buttons, displays, actions and `open_condition`:
+
+```json
+"condition": {
+  "type": "all",
+  "conditions": [
+    { "type": "has_tag", "value": "vip" },
+    { "type": "not", "condition": { "type": "has_tag", "value": "banned" } },
+    { "type": "any", "conditions": [
+        { "type": "level_gt", "value": "10" },
+        { "type": "score_gt", "value": "coins:100" }
+    ] }
+  ]
+}
+```
+
+### Open gate
+
+`open_condition` restricts who can open a GUI — through `/guiapi open`, an `open_gui` action, page navigation or an item with the `guiapi:open_gui` component. When it is false the GUI does not open and `on_deny` runs instead:
+
+```json
+{
+  "title": "VIP Lounge",
+  "open_condition": { "type": "has_tag", "value": "vip" },
+  "on_deny": [
+    { "type": "message", "value": "§cVIP only!" },
+    { "type": "sound", "value": "minecraft:entity.villager.no" }
+  ],
+  "buttons": [ ... ]
+}
+```
 
 ---
 

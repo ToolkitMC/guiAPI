@@ -103,7 +103,33 @@ public class BarrelGuiHandler {
         return inv;
     }
 
+    /**
+     * Depth of on_deny chains currently executing. An on_deny that (directly or via
+     * another GUI) re-opens a GUI whose gate is still closed would recurse forever.
+     */
+    private static int denyDepth = 0;
+
     public static void open(ServerPlayer player, GuiDefinition def, int page) {
+        // open_condition gate — checked before any state is registered or any inventory is built.
+        if (def.getOpenCondition().isPresent() && !evaluateCondition(player, def.getOpenCondition().get())) {
+            debug("open denied: player={} gui={}", player.getScoreboardName(), def.getId());
+            if (denyDepth >= 3) {
+                GuiApiMod.LOGGER.warn("[GuiAPI] on_deny of {} keeps re-opening a denied GUI — stopping.", def.getId());
+                return;
+            }
+            if (def.getOnDeny().isEmpty()) {
+                player.sendSystemMessage(Component.literal("§cYou cannot open this menu."), true);
+                return;
+            }
+            denyDepth++;
+            try {
+                executeDelayedActionChain(player, def, page, def.getOnDeny(), 0, false);
+            } finally {
+                denyDepth--;
+            }
+            return;
+        }
+
         page = Math.clamp(page, 0, def.getPageCount() - 1);
         int rows = Math.clamp(def.getRows(), 1, 6);
         int finalPage = page;
@@ -430,13 +456,7 @@ public class BarrelGuiHandler {
     }
 
     private static boolean evaluateStaticCondition(ServerPlayer player, GuiDefinition.ButtonCondition cond) {
-        // Reuses the same condition logic as buttons by wrapping into a throwaway
-        // Button-shaped evaluation — avoids duplicating the switch in evaluateCondition.
-        GuiDefinition.Button fake = new GuiDefinition.Button(
-                0, 0, "", "", List.of(), false, GuiDefinition.ClickType.ANY,
-                Optional.of(cond), List.of(), Optional.empty(), Optional.empty(), Optional.empty(),
-                "1", false, false, Optional.empty(), 0);
-        return evaluateCondition(player, fake);
+        return evaluateCondition(player, cond);
     }
 
     private static int readWidgetValue(ServerPlayer player, String valueSource) {
@@ -700,26 +720,33 @@ public class BarrelGuiHandler {
         text = text.replace("{page1}",  String.valueOf(page + 1));
         text = text.replace("{pages}",  String.valueOf(def.getPageCount()));
         text = text.replace("{xp}",     String.valueOf(player.experienceLevel));
-        text = text.replace("{input}",  GuiInputStore.INSTANCE.get(player.getUUID()));
 
-        // {score:objective}
-        int idx;
-        while ((idx = text.indexOf("{score:")) >= 0) {
-            int end = text.indexOf('}', idx);
-            if (end < 0) break;
-            String obj = text.substring(idx + 7, end);
-            int score = getScore(player, obj);
-            text = text.substring(0, idx) + score + text.substring(end + 1);
-        }
+        // Player state placeholders
+        if (text.contains("{health}"))
+            text = text.replace("{health}",     String.valueOf((int) Math.ceil(player.getHealth())));
+        if (text.contains("{max_health}"))
+            text = text.replace("{max_health}", String.valueOf((int) Math.ceil(player.getMaxHealth())));
+        if (text.contains("{food}"))
+            text = text.replace("{food}",       String.valueOf(player.getFoodData().getFoodLevel()));
+        if (text.contains("{pos_x}"))
+            text = text.replace("{pos_x}",      String.valueOf(player.blockPosition().getX()));
+        if (text.contains("{pos_y}"))
+            text = text.replace("{pos_y}",      String.valueOf(player.blockPosition().getY()));
+        if (text.contains("{pos_z}"))
+            text = text.replace("{pos_z}",      String.valueOf(player.blockPosition().getZ()));
+        if (text.contains("{online}"))
+            text = text.replace("{online}",     String.valueOf(player.level().getServer().getPlayerList().getPlayers().size()));
 
-        // {var:key}
-        while ((idx = text.indexOf("{var:")) >= 0) {
-            int end = text.indexOf('}', idx);
-            if (end < 0) break;
-            String key = text.substring(idx + 5, end);
-            String val = GuiVarStore.INSTANCE.getOrDefault(player.getUUID(), key, "");
-            text = text.substring(0, idx) + val + text.substring(end + 1);
-        }
+        // Anvil input is player-typed, so its braces are masked: it must never be
+        // re-read as {var:..}/{score:..} below (and is restored at the end).
+        text = text.replace("{input}",  PlaceholderUtil.escapeBraces(GuiInputStore.INSTANCE.get(player.getUUID())));
+
+        // {score:objective} and {var:key} — inserted values are never re-scanned
+        text = PlaceholderUtil.replaceTokens(text, "{score:", obj -> String.valueOf(getScore(player, obj)));
+        text = PlaceholderUtil.replaceTokens(text, "{var:",
+                key -> GuiVarStore.INSTANCE.getOrDefault(player.getUUID(), key, ""));
+
+        text = PlaceholderUtil.unescapeBraces(text);
 
         debug("resolve: \"{}\" → \"{}\"", text.length() > 60 ? text.substring(0, 60) + "..." : text, text);
         return text;
@@ -743,9 +770,18 @@ public class BarrelGuiHandler {
 
     static boolean evaluateCondition(ServerPlayer player, GuiDefinition.Button btn) {
         if (btn.condition().isEmpty()) return true;
+        return evaluateCondition(player, btn.condition().get());
+    }
 
-        GuiDefinition.ButtonCondition cond = btn.condition().get();
+    /** Evaluates a condition tree — all / any / not are composed by {@link ConditionLogic}. */
+    static boolean evaluateCondition(ServerPlayer player, GuiDefinition.ButtonCondition cond) {
+        return ConditionLogic.evaluate(cond, leaf -> evaluateLeafCondition(player, leaf));
+    }
+
+    private static boolean evaluateLeafCondition(ServerPlayer player, GuiDefinition.ButtonCondition cond) {
         return switch (cond.type()) {
+            // Composite types are resolved by ConditionLogic before a leaf is ever evaluated.
+            case ALL, ANY, NOT -> false;
             case HAS_TAG  -> player.entityTags().contains(cond.value());
             case NOT_TAG  -> !player.entityTags().contains(cond.value());
             case SCORE_GT -> getScore(player, cond.value().split(":", 2), 0) >
@@ -909,6 +945,11 @@ public class BarrelGuiHandler {
         MinecraftServer server = player.level().getServer();
         debug("action: player={} type={} value=\"{}\"",
                 player.getScoreboardName(), action.type(), action.value());
+        // Optional per-action condition: a false condition skips only this action.
+        if (action.condition().isPresent() && !evaluateCondition(player, action.condition().get())) {
+            debug("action skipped (condition false): type={}", action.type());
+            return false;
+        }
         switch (action.type()) {
             case RUN_COMMAND -> {
                 String cmd = action.value().startsWith("/")
@@ -1130,18 +1171,30 @@ public class BarrelGuiHandler {
             case CLEAR_VARS -> GuiVarStore.INSTANCE.clear(player.getUUID());
             case REFRESH -> refreshCurrentGui(player);
             case TAKE_ITEM -> {
-                String resolved = resolve(action.value(), player, def, currentPage);
-                String[] parts = resolved.split(":", 2);
-                String itemId = parts[0];
-                int amount = parts.length > 1 ? parseIntSafe(parts[1]) : 1;
-                takeItemCount(player, itemId, amount);
+                // "minecraft:gold_nugget:5" — the amount is the part after the LAST colon.
+                ItemSpec spec = ItemSpec.parse(resolve(action.value(), player, def, currentPage), 1);
+                takeItemCount(player, spec.itemId(), Math.max(0, spec.amount()));
             }
             case GIVE_ITEM -> {
-                String resolved = resolve(action.value(), player, def, currentPage);
-                String[] parts = resolved.split(":", 2);
-                String itemId = parts[0];
-                int amount = parts.length > 1 ? Math.max(1, parseIntSafe(parts[1])) : 1;
-                giveItemCount(player, itemId, amount);
+                ItemSpec spec = ItemSpec.parse(resolve(action.value(), player, def, currentPage), 1);
+                giveItemCount(player, spec.itemId(), Math.max(1, spec.amount()));
+            }
+            case ADD_TAG -> {
+                String tag = resolve(action.value(), player, def, currentPage).trim();
+                if (!tag.isEmpty()) player.addTag(tag);
+            }
+            case REMOVE_TAG -> {
+                String tag = resolve(action.value(), player, def, currentPage).trim();
+                if (!tag.isEmpty()) player.removeTag(tag);
+            }
+            case BROADCAST -> {
+                String text = resolve(action.value(), player, def, currentPage);
+                if (!text.isEmpty()) {
+                    Component broadcast = Component.literal(text);
+                    for (ServerPlayer recipient : server.getPlayerList().getPlayers()) {
+                        recipient.sendSystemMessage(broadcast, false);
+                    }
+                }
             }
             case ADD_XP -> {
                 String resolved = resolve(action.value(), player, def, currentPage);

@@ -52,7 +52,8 @@ public class GuiDefinition {
         RUN_COMMAND, CLOSE, OPEN_GUI, MESSAGE, NEXT_PAGE, PREV_PAGE, GOTO_PAGE, SOUND,
         SET_VAR, ADD_VAR, SUB_VAR, RESET_VAR, CLEAR_VARS, REFRESH, TAKE_ITEM, GIVE_ITEM,
         SET_SCORE, ADD_SCORE, SUB_SCORE, ACTION_BAR, ADD_XP,
-        ADD_EFFECT, REMOVE_EFFECT, CLEAR_EFFECTS, NONE, ANVIL_INPUT, RUN_FUNCTION, RUN_RANDOM_FUNCTION, SET_GAMEMODE;
+        ADD_EFFECT, REMOVE_EFFECT, CLEAR_EFFECTS, NONE, ANVIL_INPUT, RUN_FUNCTION, RUN_RANDOM_FUNCTION, SET_GAMEMODE,
+        ADD_TAG, REMOVE_TAG, BROADCAST;
 
         public static ActionType fromString(String s) {
             return switch (s.toLowerCase()) {
@@ -85,6 +86,9 @@ public class GuiDefinition {
                 case "run_function"   -> RUN_FUNCTION;
                 case "run_random_function" -> RUN_RANDOM_FUNCTION;
                 case "set_gamemode" -> SET_GAMEMODE;
+                case "add_tag"      -> ADD_TAG;
+                case "remove_tag"   -> REMOVE_TAG;
+                case "broadcast"    -> BROADCAST;
                 default            -> NONE;
             };
         }
@@ -101,7 +105,8 @@ public class GuiDefinition {
         HAS_TAG, NOT_TAG, SCORE_GT, SCORE_LT, SCORE_EQ,
         VAR_EQ, VAR_GT, VAR_LT, VAR_SET, HAS_ITEM, NOT_ITEM,
         LEVEL_GT, LEVEL_LT, HEALTH_GT, HEALTH_LT, FOOD_GT, FOOD_LT,
-        PERMISSION, GAMEMODE, IN_DIMENSION;
+        PERMISSION, GAMEMODE, IN_DIMENSION,
+        ALL, ANY, NOT;
 
         public static ConditionType fromString(String s) {
             return switch (s.toLowerCase()) {
@@ -125,6 +130,9 @@ public class GuiDefinition {
                 case "permission" -> PERMISSION;
                 case "gamemode"      -> GAMEMODE;
                 case "in_dimension"  -> IN_DIMENSION;
+                case "all"          -> ALL;
+                case "any"          -> ANY;
+                case "not"          -> NOT;
                 default           -> HAS_TAG;
             };
         }
@@ -133,13 +141,20 @@ public class GuiDefinition {
     // ── Records ──────────────────────────────────────────────────────────────
 
     /**
-     * @param type    Action type
-     * @param value   Primary value (command, message, sound id, var value, page index…)
-     * @param runWith Execution context for run_command
-     * @param var     Variable key for set_var / add_var / sub_var / reset_var actions
-     * @param delay   Action execution delay in ticks
+     * @param type      Action type
+     * @param value     Primary value (command, message, sound id, var value, page index…)
+     * @param runWith   Execution context for run_command
+     * @param var       Variable key for set_var / add_var / sub_var / reset_var actions
+     * @param delay     Action execution delay in ticks
+     * @param condition Optional condition, checked when the action is about to run
+     *                  (after any delay). If false the action is skipped and the
+     *                  rest of the chain continues.
      */
-    public record ButtonAction(ActionType type, String value, RunWith runWith, String var, int delay) {
+    public record ButtonAction(ActionType type, String value, RunWith runWith, String var, int delay,
+                               Optional<ButtonCondition> condition) {
+        public ButtonAction(ActionType type, String value, RunWith runWith, String var, int delay) {
+            this(type, value, runWith, var, delay, Optional.empty());
+        }
         public ButtonAction(ActionType type, String value) {
             this(type, value, RunWith.PLAYER, "", 0);
         }
@@ -148,7 +163,19 @@ public class GuiDefinition {
         }
     }
 
-    public record ButtonCondition(ConditionType type, String value) {}
+    /**
+     * A condition. Leaf types use {@code value}; the composite types
+     * {@code ALL} / {@code ANY} / {@code NOT} use {@code children} instead
+     * ({@code NOT} looks only at its first child).
+     */
+    public record ButtonCondition(ConditionType type, String value, List<ButtonCondition> children) {
+        public ButtonCondition {
+            children = children == null ? List.of() : List.copyOf(children);
+        }
+        public ButtonCondition(ConditionType type, String value) {
+            this(type, value, List.of());
+        }
+    }
 
     /**
      * PROGRESS_BAR widget — a horizontal run of slots that visually fills based on
@@ -294,6 +321,8 @@ public class GuiDefinition {
     // so none of the existing GuiDefinition(...) / create(...) overloads break.
     private List<ProgressBarWidget> progressBars = List.of();
     private List<StaticDisplayWidget> displays = List.of();
+    private Optional<ButtonCondition> openCondition = Optional.empty();
+    private List<ButtonAction> onDeny = List.of();
 
     // ── Constructor ──────────────────────────────────────────────────────────
 
@@ -439,6 +468,9 @@ public class GuiDefinition {
         }
         def.displays = displays;
 
+        def.openCondition = parseConditionField(obj, "open_condition");
+        def.onDeny = parseActionList(obj, "on_deny");
+
         return def;
     }
 
@@ -464,16 +496,44 @@ public class GuiDefinition {
         boolean glint = d.has("glint") && d.get("glint").getAsBoolean();
         String amount = d.has("amount") ? d.get("amount").getAsString() : "1";
 
-        Optional<ButtonCondition> condition = Optional.empty();
-        if (d.has("condition") && d.get("condition").isJsonObject()) {
-            JsonObject c = d.getAsJsonObject("condition");
-            ConditionType ct = ConditionType.fromString(
-                    c.has("type") ? c.get("type").getAsString() : "has_tag");
-            String cv = c.has("value") ? c.get("value").getAsString() : "";
-            condition = Optional.of(new ButtonCondition(ct, cv));
-        }
+        Optional<ButtonCondition> condition = parseConditionField(d, "condition");
 
         return new StaticDisplayWidget(slot, page, item, name, lore, glint, condition, amount);
+    }
+
+    /** Deepest allowed nesting of all/any/not — guards against runaway recursion. */
+    private static final int MAX_CONDITION_DEPTH = 8;
+
+    private static Optional<ButtonCondition> parseConditionField(JsonObject parent, String key) {
+        if (parent.has(key) && parent.get(key).isJsonObject()) {
+            return Optional.of(parseCondition(parent.getAsJsonObject(key), 0));
+        }
+        return Optional.empty();
+    }
+
+    /**
+     * Leaf: {@code {"type": "has_tag", "value": "vip"}}.
+     * Composite: {@code {"type": "all"|"any", "conditions": [ ... ]}} and
+     * {@code {"type": "not", "condition": { ... }}}.
+     */
+    private static ButtonCondition parseCondition(JsonObject c, int depth) {
+        if (depth > MAX_CONDITION_DEPTH) {
+            throw new IllegalArgumentException("Condition nesting is deeper than " + MAX_CONDITION_DEPTH);
+        }
+        ConditionType ct = ConditionType.fromString(
+                c.has("type") ? c.get("type").getAsString() : "has_tag");
+        String cv = c.has("value") ? c.get("value").getAsString() : "";
+
+        List<ButtonCondition> children = new ArrayList<>();
+        if (ct == ConditionType.NOT && c.has("condition") && c.get("condition").isJsonObject()) {
+            children.add(parseCondition(c.getAsJsonObject("condition"), depth + 1));
+        } else if ((ct == ConditionType.ALL || ct == ConditionType.ANY || ct == ConditionType.NOT)
+                && c.has("conditions") && c.get("conditions").isJsonArray()) {
+            for (JsonElement el : c.getAsJsonArray("conditions")) {
+                if (el.isJsonObject()) children.add(parseCondition(el.getAsJsonObject(), depth + 1));
+            }
+        }
+        return new ButtonCondition(ct, cv, children);
     }
 
     private static List<ButtonAction> parseActionList(JsonObject obj, String key) {
@@ -493,14 +553,7 @@ public class GuiDefinition {
                 ? ClickType.fromString(b.get("click_type").getAsString())
                 : ClickType.ANY;
 
-        Optional<ButtonCondition> condition = Optional.empty();
-        if (b.has("condition") && b.get("condition").isJsonObject()) {
-            JsonObject c = b.getAsJsonObject("condition");
-            ConditionType ct = ConditionType.fromString(
-                    c.has("type") ? c.get("type").getAsString() : "has_tag");
-            String cv = c.has("value") ? c.get("value").getAsString() : "";
-            condition = Optional.of(new ButtonCondition(ct, cv));
-        }
+        Optional<ButtonCondition> condition = parseConditionField(b, "condition");
 
         int cooldown = b.has("cooldown") ? Math.max(0, b.get("cooldown").getAsInt()) : 0;
 
@@ -684,7 +737,8 @@ public class GuiDefinition {
                 ? RunWith.fromString(a.get("run_with").getAsString())
                 : RunWith.PLAYER;
         int delay = a.has("delay") ? Math.max(0, a.get("delay").getAsInt()) : 0;
-        return new ButtonAction(type, value, runWith, var, delay);
+        Optional<ButtonCondition> condition = parseConditionField(a, "condition");
+        return new ButtonAction(type, value, runWith, var, delay, condition);
     }
 
     // ── Getters ──────────────────────────────────────────────────────────────
@@ -704,6 +758,10 @@ public class GuiDefinition {
     public java.util.Map<String, List<ButtonAction>> getMacros() { return macros; }
     public List<ProgressBarWidget> getProgressBars() { return progressBars; }
     public List<StaticDisplayWidget> getDisplays()   { return displays; }
+    /** Condition the player must meet to open this GUI, if any ({@code open_condition}). */
+    public Optional<ButtonCondition> getOpenCondition() { return openCondition; }
+    /** Actions run instead of opening when {@link #getOpenCondition()} is false ({@code on_deny}). */
+    public List<ButtonAction> getOnDeny()            { return onDeny; }
 
     public List<ProgressBarWidget> getProgressBarsForPage(int page) {
         return progressBars.stream().filter(p -> p.page() == page).toList();
